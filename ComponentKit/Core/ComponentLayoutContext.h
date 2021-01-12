@@ -8,18 +8,29 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
 #import <ComponentKit/CKSizeRange.h>
 
 #import <vector>
 
 @class CKComponent;
+@protocol CKSystraceListener;
 
 namespace CK {
   namespace Component {
-    class LayoutContext;
+    struct LayoutContext;
 
-    /** A stack of layout contexts. */
     typedef std::vector<LayoutContext *> LayoutContextStack;
+
+    struct LayoutContextValue {
+      /** A stack of layout contexts. */
+      LayoutContextStack stack;
+      /** The current systrace listener. Can be nil if systrace is not enabled. */
+      id<CKSystraceListener> systraceListener;
+    };
 
     /**
      Keeps track of the stack of components performing layout.
@@ -44,21 +55,35 @@ namespace CK {
       /** The size range passed to the component. */
       const CKSizeRange sizeRange;
 
+      /** The current systrace listener. Can be nil if systrace is not enabled. */
+      id<CKSystraceListener> systraceListener;
+
       /**
        Returns a reference to the current stack of components performing layout.
 
        @warning Both the reference to the stack and the pointers within the stack MUST NOT be stored or used later!
        */
-      static const LayoutContextStack &currentStack();
+      static const LayoutContextStack &currentStack() noexcept;
 
       /**
        Returns a string with the contents of the current stack, with each component on one line indented by level.
        Only the class name of each component is printed.
        */
-      static NSString *currentStackDescription();
+      static NSString *currentStackDescription() noexcept;
+
+      /**
+       Returns a name of the root component class, i.e. component that is at the root of the component tree.
+       */
+      static NSString *currentRootComponentClassName() noexcept;
 
       LayoutContext(const LayoutContext&) = delete;
       LayoutContext &operator=(const LayoutContext&) = delete;
     };
+
+    struct LayoutSystraceContext {
+      LayoutSystraceContext(id<CKSystraceListener> listener);
+    };
   }
 }
+
+#endif

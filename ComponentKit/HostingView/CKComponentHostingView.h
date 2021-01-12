@@ -10,30 +10,60 @@
 
 #import <UIKit/UIKit.h>
 
-#import <ComponentKit/CKMacros.h>
+#import <ComponentKit/CKDefines.h>
+#import <ComponentKit/CKComponentHostingViewDelegate.h>
 #import <ComponentKit/CKComponentProvider.h>
+#import <ComponentKit/CKComponentSizeRangeProviding.h>
 #import <ComponentKit/CKUpdateMode.h>
 
-@protocol CKComponentHostingViewDelegate;
-@protocol CKComponentSizeRangeProviding;
+NS_ASSUME_NONNULL_BEGIN
 
 /** A view that renders a single component. */
-@interface CKComponentHostingView : UIView
+NS_SWIFT_NAME(ComponentHostingView)
+@interface CKComponentHostingView<__covariant ModelType: id<NSObject>, __covariant ContextType: id<NSObject>> : UIView
 
 /** Notified when the view's ideal size (measured by -sizeThatFits:) may have changed. */
 @property (nonatomic, weak) id<CKComponentHostingViewDelegate> delegate;
 
-/** Designated initializer. */
-- (instancetype)initWithComponentProvider:(Class<CKComponentProvider>)componentProvider
-                        sizeRangeProvider:(id<CKComponentSizeRangeProviding>)sizeRangeProvider;
+#if CK_NOT_SWIFT
+
+/**
+ Convenience initializer that uses default analytics listener
+ @param componentProvider provider conforming to CKComponentProvider protocol.
+ @param sizeRangeProvider sizing range provider conforming to CKComponentSizeRangeProviding.
+ @see CKComponentProvider
+ @see CKComponentSizeRangeProviding
+ */
+- (instancetype)initWithComponentProviderFunc:(CKComponent * _Nullable(* _Nonnull)(ModelType model, ContextType context))componentProvider
+                            sizeRangeProvider:(id<CKComponentSizeRangeProviding>)sizeRangeProvider;
+
+#else
+
+typedef CKComponent * _Nullable(*CKComponentProviderFn)(ModelType _Nullable, ContextType _Nullable);
+
+- (instancetype)initWithComponentProvider:(CKComponentProviderFn)componentProvider
+                   sizeRangeProviderBlock:(CKComponentSizeRangeProviderBlock)sizeRangeProvider;
+
+#endif
 
 /** Updates the model used to render the component. */
-- (void)updateModel:(id<NSObject>)model mode:(CKUpdateMode)mode;
+- (void)updateModel:(ModelType _Nullable)model mode:(CKUpdateMode)mode;
 
 /** Updates the context used to render the component. */
-- (void)updateContext:(id<NSObject>)context mode:(CKUpdateMode)mode;
+- (void)updateContext:(ContextType _Nullable)context mode:(CKUpdateMode)mode;
 
-- (instancetype)init CK_NOT_DESIGNATED_INITIALIZER_ATTRIBUTE;
-- (instancetype)initWithFrame:(CGRect)frame CK_NOT_DESIGNATED_INITIALIZER_ATTRIBUTE;
+/** Appearance events to be funneled to the component tree. */
+- (void)hostingViewWillAppear;
+- (void)hostingViewDidDisappear;
+
+/** Updates the accessibility status. */
+- (void)updateAccessibilityStatus:(BOOL)accessibilityStatus mode:(CKUpdateMode)mode;
+
+CK_INIT_UNAVAILABLE;
+
+- (instancetype)initWithFrame:(CGRect)frame NS_UNAVAILABLE;
+- (instancetype)initWithCoder:(NSCoder *)coder NS_UNAVAILABLE;
 
 @end
+
+NS_ASSUME_NONNULL_END

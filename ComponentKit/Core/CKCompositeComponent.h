@@ -8,31 +8,73 @@
  *
  */
 
+#import <Foundation/Foundation.h>
+#import <ComponentKit/CKDefines.h>
 #import <ComponentKit/CKComponent.h>
+#import <ComponentKit/CKComponentViewConfiguration_SwiftBridge.h>
+
+NS_ASSUME_NONNULL_BEGIN
 
 /**
  CKCompositeComponent allows you to hide your implementation details and avoid subclassing layout components like
- CKStackLayoutComponent. In almost all cases, you should subclass CKCompositeComponent instead of subclassing any other
+ CKFlexboxComponent. In almost all cases, you should subclass CKCompositeComponent instead of subclassing any other
  class directly.
 
  For example, suppose you create a component that should lay out some children in a vertical stack.
- Incorrect: subclass CKStackLayoutComponent and call `self newWithChildren:`.
- Correct: subclass CKCompositeComponent and call `super newWithComponent:[CKStackLayoutComponent newWithChildren...`
+ Incorrect: subclass CKFlexboxComponent and call `self newWithChildren:`.
+ Correct: subclass CKCompositeComponent and call `super newWithComponent:[CKFlexboxComponent newWithChildren...`
 
  This hides your layout implementation details from the outside world.
 
  @warning Overriding -layoutThatFits:parentSize: or -computeLayoutThatFits: is **not allowed** for any subclass.
  */
+NS_SWIFT_NAME(CompositeComponent)
 @interface CKCompositeComponent : CKComponent
 
+CK_INIT_UNAVAILABLE;
+
+CK_COMPONENT_INIT_UNAVAILABLE;
+
+#if CK_SWIFT
+
+- (instancetype)initWithSwiftView:(CKComponentViewConfiguration_SwiftBridge *_Nullable)swiftView
+                        component:(NS_RELEASES_ARGUMENT id<CKMountable>)component NS_REFINED_FOR_SWIFT NS_DESIGNATED_INITIALIZER;
+
+#else
+
+- (instancetype _Nullable)initWithView:(const CKComponentViewConfiguration &)view
+                             component:(NS_RELEASES_ARGUMENT id<CKMountable> _Nullable)component NS_DESIGNATED_INITIALIZER;
+
 /** Calls the initializer with {} for view. */
-+ (instancetype)newWithComponent:(CKComponent *)component;
++ (nullable instancetype)newWithComponent:(NS_RELEASES_ARGUMENT id<CKMountable> _Nullable)component;
 
 /**
+ DEPRECATED - Do not use. Use CK::CompositeComponentBuilder instead.
  @param view Passed to CKComponent's initializer. This should be used sparingly for CKCompositeComponent. Prefer
  delegating view configuration completely to the child component to hide implementation details.
  @param component The component the composite component uses for layout and sizing.
  */
-+ (instancetype)newWithView:(const CKComponentViewConfiguration &)view component:(CKComponent *)component;
++ (nullable instancetype)newWithView:(const CKComponentViewConfiguration &)view component:(NS_RELEASES_ARGUMENT id<CKMountable> _Nullable)component;
+
+#endif
+
+/** Access the child component. For internal use only. */
+@property (nonatomic, strong, readonly, nullable) id<CKMountable> child;
 
 @end
+
+#if CK_SWIFT
+#define CK_COMPOSITE_COMPONENT_INIT_UNAVAILABLE \
+  - (instancetype)initWithSwiftView:(CKComponentViewConfiguration_SwiftBridge *_Nullable)swiftView \
+                          component:(NS_RELEASES_ARGUMENT id<CKMountable>)component NS_UNAVAILABLE;
+#else
+#define CK_COMPOSITE_COMPONENT_INIT_UNAVAILABLE \
+  - (instancetype _Nullable)initWithView:(const CKComponentViewConfiguration &)view \
+                               component:(NS_RELEASES_ARGUMENT id<CKMountable> _Nullable)component NS_UNAVAILABLE; \
+  + (instancetype _Nullable)newWithComponent:(NS_RELEASES_ARGUMENT id<CKMountable> _Nullable)component NS_UNAVAILABLE; \
+  + (instancetype _Nullable)newWithView:(const CKComponentViewConfiguration &)view component:(NS_RELEASES_ARGUMENT id<CKMountable> _Nullable)component NS_UNAVAILABLE;
+#endif
+
+NS_ASSUME_NONNULL_END
+
+#import <ComponentKit/CompositeComponentBuilder.h>

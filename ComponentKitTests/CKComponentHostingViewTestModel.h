@@ -11,19 +11,33 @@
 #import <UIKit/UIKit.h>
 
 
-#import <ComponentKit/CKMacros.h>
+#import <ComponentKit/CKDefines.h>
 #import <ComponentKit/CKComponentSize.h>
 
+typedef NS_ENUM(NSUInteger, CKComponentHostingViewWrapperType) {
+  CKComponentHostingViewWrapperTypeNone,
+  CKComponentHostingViewWrapperTypeFlexbox,
+  CKComponentHostingViewWrapperTypeTestComponent,
+  CKComponentHostingViewWrapperTypeRenderComponent,
+  CKComponentHostingViewWrapperTypeDeepViewHierarchy,
+};
+
 @interface CKComponentHostingViewTestModel : NSObject
+
+CK_INIT_UNAVAILABLE;
 
 - (instancetype)initWithColor:(UIColor *)color
                          size:(const CKComponentSize &)size;
 
-- (instancetype)init CK_NOT_DESIGNATED_INITIALIZER_ATTRIBUTE;
+- (instancetype)initWithColor:(UIColor *)color
+                         size:(const CKComponentSize &)size
+                  wrapperType:(CKComponentHostingViewWrapperType)wrapperType
+        willGenerateComponent:(void(^)())willGenerateComponent NS_DESIGNATED_INITIALIZER;
 
 @property (nonatomic, strong, readonly) UIColor *color;
-
 @property (nonatomic, readonly) CKComponentSize size;
+@property (nonatomic, readonly) CKComponentHostingViewWrapperType wrapperType;
+@property (nonatomic, copy, readonly) void(^willGenerateComponent)();
 
 @end
 

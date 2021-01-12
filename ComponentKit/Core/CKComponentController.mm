@@ -11,22 +11,16 @@
 #import "CKComponentController.h"
 #import "CKComponentControllerInternal.h"
 
+#import <mutex>
+
 #import <ComponentKit/CKAssert.h>
+#import <ComponentKit/CKGlobalConfig.h>
+#import <ComponentKit/CKInternalHelpers.h>
 
 #import "CKComponentInternal.h"
 #import "CKComponentSubclass.h"
 
-struct CKPendingComponentAnimation {
-  CKComponentAnimation animation;
-  id context; // The context returned by the animation's willRemount block.
-};
-
-struct CKAppliedComponentAnimation {
-  CKComponentAnimation animation;
-  id context; // The context returned by the animation's didRemount block.
-};
-
-typedef NS_ENUM(NSUInteger, CKComponentControllerState) {
+typedef NS_ENUM(NSInteger, CKComponentControllerState) {
   CKComponentControllerStateUnmounted = 0,
   CKComponentControllerStateMounting,
   CKComponentControllerStateMounted,
@@ -34,8 +28,13 @@ typedef NS_ENUM(NSUInteger, CKComponentControllerState) {
   CKComponentControllerStateUnmounting,
 };
 
-typedef size_t CKComponentAnimationID;
-typedef std::unordered_map<CKComponentAnimationID, CKAppliedComponentAnimation> CKAppliedComponentAnimationMap;
+#if CK_ASSERTIONS_ENABLED
+typedef NS_ENUM(NSInteger, CKComponentControllerLifecycleState) {
+  CKComponentControllerAllocated = 0,
+  CKComponentControllerInitialized,
+  CKComponentControllerInvalidated,
+};
+#endif
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
@@ -56,103 +55,214 @@ static NSString *componentStateName(CKComponentControllerState state)
 }
 #pragma clang diagnostic pop
 
-static void eraseAnimation(CKAppliedComponentAnimationMap &map, CKComponentAnimationID animationID)
-{
-  auto it = map.find(animationID);
-  if (it != map.end()) {
-    const CKAppliedComponentAnimation &appliedAnim = it->second;
-    appliedAnim.animation.cleanup(appliedAnim.context);
-    map.erase(animationID);
-  }
-}
-
-struct CKComponentControllerAnimationData {
-  CKComponentAnimationID nextAnimationID;
-  std::vector<CKPendingComponentAnimation> pendingAnimationsOnInitialMount;
-  CKAppliedComponentAnimationMap appliedAnimationsOnInitialMount;
-  std::vector<CKPendingComponentAnimation> pendingAnimations;
-  CKAppliedComponentAnimationMap appliedAnimations;
-};
-
-struct CKComponentControllerAnimationWrapper {
-public:
-  CKComponentControllerAnimationData *operator->() {
-    if (_animationData == nullptr) {
-      _animationData.reset(new CKComponentControllerAnimationData());
-    }
-    return _animationData.get();
-  };
-
-  explicit operator bool() const {
-    return _animationData != nullptr;
-  };
-private:
-  std::unique_ptr<CKComponentControllerAnimationData> _animationData;
-};
-
 @implementation CKComponentController
 {
   CKComponentControllerState _state;
   BOOL _updatingComponent;
-  BOOL _performedInitialMount;
-  CKComponent *_previousComponent;
-  CKComponentControllerAnimationWrapper _animationData;
+  __weak CKComponent *_component;
+  // Protects `_component` and `_latestComponent` when `threadSafe_component` is called.
+  std::mutex _componentMutex;
+#if CK_ASSERTIONS_ENABLED
+  __weak NSThread *_initializationThread;
+  CKComponentControllerLifecycleState _lifecycleState;
+#endif
 }
 
 - (instancetype)initWithComponent:(CKComponent *)component
 {
   if (self = [super init]) {
     _component = component;
+#if CK_ASSERTIONS_ENABLED
+    _initializationThread = [NSThread currentThread];
+#endif
   }
   return self;
 }
 
-- (void)willMount {}
-- (void)didMount {}
-- (void)willRemount {}
-- (void)didRemount {}
-- (void)willUnmount {}
-- (void)didUnmount {}
-- (void)willUpdateComponent {}
-- (void)didUpdateComponent {}
-- (void)componentWillRelinquishView {}
-- (void)componentDidAcquireView {}
-- (void)componentTreeWillAppear {}
-- (void)componentTreeDidDisappear {}
+- (void)dealloc
+{
+#if CK_ASSERTIONS_ENABLED
+  CKWarn(
+    _lifecycleState == CKComponentControllerInvalidated ||
+    _lifecycleState == CKComponentControllerAllocated ||
+    (_lifecycleState == CKComponentControllerInitialized &&
+     !CKSubclassOverridesInstanceMethod([CKComponentController class], self.class, @selector(invalidateController))),
+    @"Dealloc called but controller (%@) was: %td", self.class, _lifecycleState);
+#endif
+}
+
+- (void)setLatestComponent:(CKComponent *)latestComponent
+{
+  CKAssertMainThread();
+  if (latestComponent != _latestComponent) {
+    [self willUpdateComponent];
+    if (self.shouldAcquireLockWhenUpdatingComponent) {
+      std::lock_guard<std::mutex> lock(_componentMutex);
+      _latestComponent = latestComponent;
+      _updatingComponent = YES;
+    } else {
+      _latestComponent = latestComponent;
+      _updatingComponent = YES;
+    }
+  }
+}
+
+- (CKComponent *)component
+{
+#if CK_ASSERTIONS_ENABLED
+  if (_initializationThread != [NSThread currentThread]) {
+    CKAssertWithCategory([NSThread isMainThread],
+                         NSStringFromClass(self.class),
+                         @"`self.component` must be called on the main thread");
+  }
+#endif
+  const auto component = _component ?: _latestComponent;
+  CKWarn(component != nil, @"`nil` component shouldn't be returned");
+  return component;
+}
+
+- (CKComponent *)threadSafe_component
+{
+  CKComponent *component = nil;
+  if ([NSThread isMainThread]) {
+    component = _component ?: _latestComponent;
+  } else {
+    CKAssert(self.shouldAcquireLockWhenUpdatingComponent,
+             @"threadSafe_component should only be called when updating component is thread safe as well");
+    std::lock_guard<std::mutex> lock(_componentMutex);
+    component = _component ?: _latestComponent;
+  }
+
+  CKWarn(component != nil, @"`nil` component shouldn't be returned");
+  return component;
+}
+
+- (BOOL)shouldAcquireLockWhenUpdatingComponent
+{
+  return NO;
+}
+
+- (void)didInit {
+  CKAssertMainThread();
+#if CK_ASSERTIONS_ENABLED
+  CKWarn(_lifecycleState == CKComponentControllerAllocated,
+         @"Did init called but controller (%@) was: %td", self.class, _lifecycleState);
+  _lifecycleState = CKComponentControllerInitialized;
+#endif
+}
+
+- (void)willMount {
+  CKAssertMainThread();
+}
+
+- (void)didMount {
+  CKAssertMainThread();
+}
+
+- (void)willRemount {
+  CKAssertMainThread();
+}
+
+- (void)didRemount {
+  CKAssertMainThread();
+}
+
+- (void)willUnmount {
+  CKAssertMainThread();
+}
+
+- (void)didUnmount {
+  CKAssertMainThread();
+}
+
+- (void)willUpdateComponent {
+  CKAssertMainThread();
+}
+
+- (void)didUpdateComponent {
+  CKAssertMainThread();
+}
+
+- (void)componentWillRelinquishView {
+  CKAssertMainThread();
+}
+
+- (void)componentDidAcquireView {
+  CKAssertMainThread();
+}
+
+- (void)componentTreeWillAppear {
+  CKAssertMainThread();
+}
+
+- (void)componentTreeDidDisappear {
+  CKAssertMainThread();
+}
+
+- (void)invalidateController {
+  CKAssertMainThread();
+#if CK_ASSERTIONS_ENABLED
+  CKWarnWithCategory(_lifecycleState == CKComponentControllerInitialized ||
+                     (_lifecycleState == CKComponentControllerAllocated &&
+                     !CKSubclassOverridesInstanceMethod([CKComponentController class], self.class, @selector(didInit))),
+                     self.component.className,
+                     @"Invalidate called but controller (%@) was: %td", self.class, _lifecycleState);
+  _lifecycleState = CKComponentControllerInvalidated;
+#endif
+}
+- (void)didPrepareLayout:(const RCLayout &)layout forComponent:(CKComponent *)component {}
 
 #pragma mark - Hooks
 
+- (void)willStartUpdateToComponent:(CKComponent *)component
+{
+  // We need to check `_updatingComponent` so that `willUpdateComponent` will be triggered if `_latestComponent`
+  // is not updated after component build.
+  if (!_updatingComponent) {
+    if (component != _component) {
+      [self willUpdateComponent];
+      if (self.shouldAcquireLockWhenUpdatingComponent) {
+        std::lock_guard<std::mutex> lock(_componentMutex);
+        _component = component;
+        _updatingComponent = YES;
+      } else {
+        _component = component;
+        _updatingComponent = YES;
+      }
+    }
+  } else {
+    if (self.shouldAcquireLockWhenUpdatingComponent) {
+      std::lock_guard<std::mutex> lock(_componentMutex);
+      _component = component;
+    } else {
+      _component = component;
+    }
+  }
+}
+
+- (void)didFinishComponentUpdate
+{
+  if (_updatingComponent) {
+    [self didUpdateComponent];
+    _updatingComponent = NO;
+  }
+}
+
 - (void)componentWillMount:(CKComponent *)component
 {
-  if (component != _component) {
-    [self willUpdateComponent];
-    _previousComponent = _component;
-    _component = component;
-    _updatingComponent = YES;
-  }
+  [self willStartUpdateToComponent:component];
 
   switch (_state) {
     case CKComponentControllerStateUnmounted:
       _state = CKComponentControllerStateMounting;
       [self willMount];
-      if (!_performedInitialMount) {
-        _performedInitialMount = YES;
-        for (const auto &animation : [component animationsOnInitialMount]) {
-          _animationData->pendingAnimationsOnInitialMount.push_back({animation, animation.willRemount()});
-        }
-      }
       break;
     case CKComponentControllerStateMounted:
       _state = CKComponentControllerStateRemounting;
       [self willRemount];
-      if (_previousComponent) { // Only animate if updating from an old component to a new one, and previously mounted
-        for (const auto &animation : [component animationsFromPreviousComponent:_previousComponent]) {
-          _animationData->pendingAnimations.push_back({animation, animation.willRemount()});
-        }
-      }
       break;
     default:
-      CKFailAssert(@"Unexpected state '%@' in %@ (%@)", componentStateName(_state), [self class], _component);
+      CKCAssertWithCategory(NO, NSStringFromClass([self class]), @"Unexpected state '%@' for %@", componentStateName(_state), [_component class]);
   }
 }
 
@@ -162,46 +272,16 @@ private:
     case CKComponentControllerStateMounting:
       _state = CKComponentControllerStateMounted;
       [self didMount];
-      if (_animationData) {
-        for (const auto &pendingAnimation : _animationData->pendingAnimationsOnInitialMount) {
-          const CKComponentAnimation &anim = pendingAnimation.animation;
-          [CATransaction begin];
-          CKComponentAnimationID animationID = _animationData->nextAnimationID++;
-          [CATransaction setCompletionBlock:^() {
-            eraseAnimation(_animationData->appliedAnimationsOnInitialMount, animationID);
-          }];
-          _animationData->appliedAnimationsOnInitialMount.insert({animationID, {anim, anim.didRemount(pendingAnimation.context)}});
-          [CATransaction commit];
-        }
-        _animationData->pendingAnimationsOnInitialMount.clear();
-      }
       break;
     case CKComponentControllerStateRemounting:
       _state = CKComponentControllerStateMounted;
       [self didRemount];
-      if (_animationData) {
-        for (const auto &pendingAnimation : _animationData->pendingAnimations) {
-          const CKComponentAnimation &anim = pendingAnimation.animation;
-          [CATransaction begin];
-          CKComponentAnimationID animationID = _animationData->nextAnimationID++;
-          [CATransaction setCompletionBlock:^() {
-            eraseAnimation(_animationData->appliedAnimations, animationID);
-          }];
-          _animationData->appliedAnimations.insert({animationID, {anim, anim.didRemount(pendingAnimation.context)}});
-          [CATransaction commit];
-        }
-        _animationData->pendingAnimations.clear();
-      }
       break;
     default:
-      CKFailAssert(@"Unexpected state '%@' in %@ (%@)", componentStateName(_state), [self class], _component);
+     CKCAssertWithCategory(NO, NSStringFromClass([self class]), @"Unexpected state '%@' for %@", componentStateName(_state), [_component class]);
   }
 
-  if (_updatingComponent) {
-    [self didUpdateComponent];
-    _previousComponent = nil;
-    _updatingComponent = NO;
-  }
+  [self didFinishComponentUpdate];
 }
 
 - (void)componentWillUnmount:(CKComponent *)component
@@ -212,14 +292,13 @@ private:
       if (component == _component) {
         _state = CKComponentControllerStateUnmounting;
         [self willUnmount];
-        [self _cleanupAppliedAnimations];
       }
       break;
     case CKComponentControllerStateRemounting:
       CKAssert(component != _component, @"Didn't expect the new component to be unmounting during remount");
       break;
     default:
-      CKFailAssert(@"Unexpected state '%@' in %@ (%@)", componentStateName(_state), [self class], _component);
+      CKCAssertWithCategory(NO, NSStringFromClass([self class]), @"Unexpected state '%@' for %@", componentStateName(_state), [_component class]);
   }
 }
 
@@ -238,29 +317,14 @@ private:
       CKAssert(component != _component, @"Didn't expect the new component to be unmounted while mounted");
       break;
     default:
-      CKFailAssert(@"Unexpected state '%@' in %@ (%@)", componentStateName(_state), [self class], _component);
+      CKCAssertWithCategory(NO, NSStringFromClass([self class]), @"Unexpected state '%@' for %@", componentStateName(_state), [_component class]);
   }
 }
 
 - (void)_relinquishView
 {
   [self componentWillRelinquishView];
-  [self _cleanupAppliedAnimations];
   _view = nil;
-}
-
-- (void)_cleanupAppliedAnimations
-{
-  if (_animationData) {
-    for (const auto &appliedAnimation : _animationData->appliedAnimationsOnInitialMount) {
-      appliedAnimation.second.animation.cleanup(appliedAnimation.second.context);
-    }
-    _animationData->appliedAnimationsOnInitialMount.clear();
-    for (const auto &appliedAnimation : _animationData->appliedAnimations) {
-      appliedAnimation.second.animation.cleanup(appliedAnimation.second.context);
-    }
-    _animationData->appliedAnimations.clear();
-  }
 }
 
 - (void)component:(CKComponent *)component willRelinquishView:(UIView *)view
@@ -276,7 +340,7 @@ private:
   if (component == _component) {
     if (view != _view) {
       if (_view) {
-        CKAssertNotNil(_previousComponent, @"Only expect to acquire a new view before relinquishing old if updating");
+        CKAssert(_updatingComponent, @"Only expect to acquire a new view before relinquishing old if updating");
         [self _relinquishView];
       }
       _view = view;

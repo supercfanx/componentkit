@@ -9,15 +9,20 @@
  */
 
 #import <ComponentKit/CKComponentScope.h>
+#import <ComponentKit/CKStatefulViewComponentController.h>
 
 #import "CKTestStatefulViewComponent.h"
-#import "CKStatefulViewComponentController.h"
 
 @interface CKTestStatefulViewComponent ()
 @property (nonatomic, strong) UIColor *color;
 @end
 
 @implementation CKTestStatefulViewComponent
+
++(Class<CKComponentControllerProtocol>)controllerClass {
+  return [CKTestStatefulViewComponentController class];
+}
+
 + (instancetype)newWithColor:(UIColor *)color
 {
   CKComponentScope scope(self);

@@ -8,65 +8,87 @@
  *
  */
 
-#import <utility>
-#import <vector>
+#import <ComponentKit/CKDefines.h>
 
-#import <UIKit/UIKit.h>
+#if CK_NOT_SWIFT
 
-#import <ComponentKit/CKAssert.h>
-#import <ComponentKit/CKSizeRange.h>
+#import <ComponentKit/CKBuildTrigger.h>
+#import <ComponentKit/RCLayout.h>
+#import <ComponentKit/CKOptional.h>
+#import <ComponentKit/CKComponentScopeTypes.h>
 
-@class CKComponent;
+@protocol CKAnalyticsListener;
 @class CKComponentScopeRoot;
-
-struct CKComponentLayoutChild;
-
-/** Deletes the target off the main thread; important since component layouts are large recursive structures. */
-struct CKOffMainThreadDeleter {
-  void operator()(std::vector<CKComponentLayoutChild> *target) noexcept;
-};
-
-/** Represents the computed size of a component, as well as the computed sizes and positions of its children. */
-struct CKComponentLayout {
-  CKComponent *component;
-  CGSize size;
-  std::shared_ptr<const std::vector<CKComponentLayoutChild>> children;
-  NSDictionary *extra;
-
-  CKComponentLayout(CKComponent *c, CGSize s, std::vector<CKComponentLayoutChild> ch = {}, NSDictionary *e = nil) noexcept
-  : component(c), size(s), children(new std::vector<CKComponentLayoutChild>(std::move(ch)), CKOffMainThreadDeleter()), extra(e) {
-    CKCAssertNotNil(c, @"Nil components are not allowed");
-  };
-
-  CKComponentLayout() noexcept
-  : component(nil), size({0, 0}), children(new std::vector<CKComponentLayoutChild>(), CKOffMainThreadDeleter()), extra(nil) {};
-};
-
-struct CKComponentLayoutChild {
-  CGPoint position;
-  CKComponentLayout layout;
-};
 
 /**
  Recursively mounts the layout in the view, returning a set of the mounted components.
+ This function is not for a generic use case of mounting every implementation of `CKMountable`, instead it's only for `CKComponent`.
  @param layout The layout to mount, usually returned from a call to -layoutThatFits:parentSize:
  @param view The view in which to mount the layout.
  @param previouslyMountedComponents If a previous layout was mounted, pass the return value of the previous call to
         CKMountComponentLayout; any components that are not present in the new layout will be unmounted.
  @param supercomponent Usually pass nil; if you are mounting a subtree of a layout, pass the parent component so the
         component responder chain can be connected correctly.
+ @param analyticsListener analytics listener used to log mount time.
  */
-NSSet *CKMountComponentLayout(const CKComponentLayout &layout,
-                              UIView *view,
-                              NSSet *previouslyMountedComponents,
-                              CKComponent *supercomponent);
+NSSet<id<CKMountable>> *CKMountComponentLayout(const RCLayout &layout,
+                                               UIView *view,
+                                               NSSet<id<CKMountable>> *previouslyMountedComponents,
+                                               id<CKMountable> supercomponent,
+                                               id<CKAnalyticsListener> analyticsListener = nil);
+
+struct CKComponentRootLayout { // This is pending renaming
+  /** Layout cache for components that have controller. */
+  using ComponentLayoutCache = std::unordered_map<id<CKMountable>, RCLayout, CK::hash<id<CKMountable>>, CK::is_equal<id<CKMountable>>>;
+  using ComponentsByPredicateMap = std::unordered_map<CKMountablePredicate, std::vector<id<CKMountable>>>;
+
+  CKComponentRootLayout() {}
+  explicit CKComponentRootLayout(RCLayout layout)
+  : CKComponentRootLayout(layout, {}, {}) {}
+  explicit CKComponentRootLayout(RCLayout layout, ComponentLayoutCache layoutCache, ComponentsByPredicateMap componentsByPredicate)
+  : _layout(std::move(layout)), _layoutCache(std::move(layoutCache)), _componentsByPredicate(std::move(componentsByPredicate)) {}
+
+  /**
+   This method returns a RCLayout from the cache for the component if it has a controller.
+   @param component The component to look for the layout with.
+   */
+  auto cachedLayoutForComponent(id<CKMountable> component) const
+  {
+    const auto it = _layoutCache.find(component);
+    return it != _layoutCache.end() ? it->second : RCLayout {};
+  }
+
+  auto componentsMatchingPredicate(const CKMountablePredicate p) const
+  {
+    const auto it = _componentsByPredicate.find(p);
+    return it != _componentsByPredicate.end() ? it->second : std::vector<id<CKMountable>> {};
+  }
+
+  void enumerateCachedLayout(void(^block)(const RCLayout &layout)) const;
+
+  const auto &layout() const { return _layout; }
+  auto component() const { return _layout.component; }
+  auto size() const { return _layout.size; }
+
+private:
+  RCLayout _layout;
+  ComponentLayoutCache _layoutCache;
+  ComponentsByPredicateMap _componentsByPredicate;
+};
 
 /**
  Safely computes the layout of the given root component by guarding against nil components.
  @param rootComponent The root component to compute the layout for.
  @param sizeRange The size range to compute the component layout within.
+ @param analyticsListener analytics listener used to log layout time.
+ @param buildTrigger Indicates the source that triggers this layout computation.
+ @param scopeRoot The scope root of the current tree.
  */
-CKComponentLayout CKComputeRootComponentLayout(CKComponent *rootComponent, const CKSizeRange &sizeRange);
+CKComponentRootLayout CKComputeRootComponentLayout(id<CKMountable> rootComponent,
+                                                   const CKSizeRange &sizeRange,
+                                                   id<CKAnalyticsListener> analyticsListener = nil,
+                                                   CK::Optional<CKBuildTrigger> buildTrigger = CK::none,
+                                                   CKComponentScopeRoot *scopeRoot = nil);
 
 /**
  Safely computes the layout of the given component by guarding against nil components.
@@ -74,9 +96,8 @@ CKComponentLayout CKComputeRootComponentLayout(CKComponent *rootComponent, const
  @param sizeRange The size range to compute the component layout within.
  @param parentSize The parent size of the component to compute the layout for.
  */
-CKComponentLayout CKComputeComponentLayout(CKComponent *component,
+RCLayout CKComputeComponentLayout(id<CKMountable> component,
                                            const CKSizeRange &sizeRange,
                                            const CGSize parentSize);
 
-/** Unmounts all components returned by a previous call to CKMountComponentLayout. */
-void CKUnmountComponents(NSSet *componentsToUnmount);
+#endif

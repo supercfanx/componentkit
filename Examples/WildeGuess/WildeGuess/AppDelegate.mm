@@ -11,26 +11,59 @@
 
 #import "AppDelegate.h"
 
-#import "WildeGuessCollectionViewController.h"
+#import <WildeGuessKit/WildeGuessCollectionViewController.h>
+#import <ComponentKit/CKComponent.h>
+#import <WildeGuessKit/Quote.h>
+#import <WildeGuessKit/QuoteContext.h>
+#import <SwiftWildeGuessKit/SwiftWildeGuessKit-Swift.h>
 
-@implementation AppDelegate {
+@implementation AppDelegate
+{
   UIWindow *_window;
+  UINavigationController *_navigationController;
+  BOOL _showsSwiftViewController;
 }
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
   _window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
-
-  UICollectionViewFlowLayout *flowLayout = [[UICollectionViewFlowLayout alloc] init];
-  [flowLayout setScrollDirection:UICollectionViewScrollDirectionVertical];
-  [flowLayout setMinimumInteritemSpacing:0];
-  [flowLayout setMinimumLineSpacing:0];
-
-  WildeGuessCollectionViewController *viewController = [[WildeGuessCollectionViewController alloc] initWithCollectionViewLayout:flowLayout];
-
-  [_window setRootViewController:[[UINavigationController alloc] initWithRootViewController:viewController]];
+  [_window setRootViewController:[[UINavigationController alloc] initWithRootViewController:[self makeObjectiveCViewController]]];
   [_window makeKeyAndVisible];
   return YES;
 }
 
+- (UIViewController *)makeObjectiveCViewController
+{
+  UIViewController *viewController = [WildeGuessCollectionViewController new];
+  viewController.navigationItem.rightBarButtonItem = [self makeBarButtonItem];
+  return viewController;
+}
+
+static CKComponent *swiftComponentGenerator(Quote *quote, QuoteContext *quoteContext) {
+  return [Trampoline componentWithText:quote.text author:quote.author style:(NSInteger)quote.style];
+}
+
+- (UIViewController *)makeSwiftViewController
+{
+  UIViewController *viewController = [[WildeGuessCollectionViewController alloc] initWithProvider:swiftComponentGenerator];
+  viewController.navigationItem.rightBarButtonItem = [self makeBarButtonItem];
+  return viewController;
+}
+
+- (UIBarButtonItem *)makeBarButtonItem
+{
+  NSString *const title = _showsSwiftViewController ? @"Obj-C" : @"Swift";
+  return [[UIBarButtonItem alloc] initWithTitle:title style:UIBarButtonItemStylePlain target:self action:@selector(toggleViewController)];
+}
+
+- (void)toggleViewController
+{
+  _showsSwiftViewController = _showsSwiftViewController == NO;
+  UINavigationController *navigationController = (id)_window.rootViewController;
+  navigationController.viewControllers = @[_showsSwiftViewController ?
+                                           [self makeSwiftViewController]
+                                           : [self makeObjectiveCViewController]];
+}
+
 @end
+

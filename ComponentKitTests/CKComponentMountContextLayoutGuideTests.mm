@@ -10,14 +10,18 @@
 
 #import <XCTest/XCTest.h>
 
-#import <ComponentKitTestHelpers/CKComponentLifecycleTestController.h>
+#import <ComponentKitTestHelpers/CKComponentLifecycleTestHelper.h>
 
 #import <ComponentKit/CKComponent.h>
 #import <ComponentKit/CKComponentInternal.h>
 #import <ComponentKit/CKComponentSubclass.h>
 #import <ComponentKit/CKStaticLayoutComponent.h>
 
-@interface CKComponentMountContextLayoutGuideTests : XCTestCase
+#import "CKComponentTestCase.h"
+
+@protocol CKAnalyticsListener;
+
+@interface CKComponentMountContextLayoutGuideTests : CKComponentTestCase
 @end
 
 @interface CKLayoutGuideTestComponent : CKComponent
@@ -36,7 +40,7 @@
    children:{
      {{50, 50}, c, {100, 100}},
    }];
-  CKComponentLifecycleTestController *componentLifecycleTestController = [[CKComponentLifecycleTestController alloc] initWithComponentProvider:nil
+  CKComponentLifecycleTestHelper *componentLifecycleTestController = [[CKComponentLifecycleTestHelper alloc] initWithComponentProvider:nullptr
                                                                                                                              sizeRangeProvider:nil];
   [componentLifecycleTestController updateWithState:{
     .componentLayout = [layoutComponent layoutThatFits:{} parentSize:{NAN, NAN}]
@@ -65,7 +69,7 @@
    children:{
      {{100, 100}, innerLayoutComponent, {100, 100}},
    }];
-  CKComponentLifecycleTestController *componentLifecycleTestController = [[CKComponentLifecycleTestController alloc] initWithComponentProvider:nil
+  CKComponentLifecycleTestHelper *componentLifecycleTestController = [[CKComponentLifecycleTestHelper alloc] initWithComponentProvider:nullptr
                                                                                                                              sizeRangeProvider:nil];
   [componentLifecycleTestController updateWithState:{
     .componentLayout = [outerLayoutComponent layoutThatFits:{} parentSize:{NAN, NAN}]
@@ -82,13 +86,11 @@
 @implementation CKLayoutGuideTestComponent
 
 - (CK::Component::MountResult)mountInContext:(const CK::Component::MountContext &)context
-                                        size:(const CGSize)size
-                                    children:(std::shared_ptr<const std::vector<CKComponentLayoutChild>>)children
+                                      layout:(const RCLayout &)layout
                               supercomponent:(CKComponent *)supercomponent
 {
   const CK::Component::MountResult mountResult = [super mountInContext:context
-                                                                  size:size
-                                                              children:children
+                                                                layout:layout
                                                         supercomponent:supercomponent];
   _layoutGuideUsedAtMountTime = context.layoutGuide;
   return mountResult;

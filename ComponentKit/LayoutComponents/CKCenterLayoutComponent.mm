@@ -10,7 +10,10 @@
 
 #import "CKCenterLayoutComponent.h"
 
-#import "CKInternalHelpers.h"
+#import <ComponentKit/CKComponentPerfScope.h>
+#import <ComponentKit/CKInternalHelpers.h>
+
+#import "CKComponentSize_SwiftBridge+Internal.h"
 #import "CKComponentSubclass.h"
 #import "ComponentUtilities.h"
 
@@ -21,12 +24,25 @@
   CKComponent *_child;
 }
 
-+ (instancetype)newWithCenteringOptions:(CKCenterLayoutComponentCenteringOptions)centeringOptions
-                          sizingOptions:(CKCenterLayoutComponentSizingOptions)sizingOptions
-                                  child:(CKComponent *)child
-                                   size:(const CKComponentSize &)size
+- (instancetype)initWithCenteringOptions:(CKCenterLayoutComponentCenteringOptions)centeringOptions
+                           sizingOptions:(CKCenterLayoutComponentSizingOptions)sizingOptions
+                                   child:(CKComponent *)child
+                               swiftSize:(CKComponentSize_SwiftBridge *_Nullable)swiftSize
 {
-  CKCenterLayoutComponent *c = [super newWithView:{} size:size];
+  const auto size = swiftSize != nil ? swiftSize.componentSize : CKComponentSize{};
+  return [self initWithCenteringOptions:centeringOptions
+                          sizingOptions:sizingOptions
+                                  child:child
+                                   size:size];
+}
+
+- (instancetype)initWithCenteringOptions:(CKCenterLayoutComponentCenteringOptions)centeringOptions
+                           sizingOptions:(CKCenterLayoutComponentSizingOptions)sizingOptions
+                                   child:(CKComponent *)child
+                                    size:(const CKComponentSize &)size
+{
+  CKComponentPerfScope perfScope(self.class);
+  CKCenterLayoutComponent *c = [super initWithView:{} size:size];
   if (c) {
     c->_centeringOptions = centeringOptions;
     c->_sizingOptions = sizingOptions;
@@ -35,7 +51,7 @@
   return c;
 }
 
-- (CKComponentLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
 {
   // If we have a finite size in any direction, pass this so that the child can
   // resolve percentages agains it. Otherwise pass kCKComponentParentDimensionUndefined
@@ -50,7 +66,7 @@
     (_centeringOptions & CKCenterLayoutComponentCenteringX) != 0 ? 0 : constrainedSize.min.width,
     (_centeringOptions & CKCenterLayoutComponentCenteringY) != 0 ? 0 : constrainedSize.min.height,
   };
-  const CKComponentLayout childLayout = CKComputeComponentLayout(_child, {minChildSize, {constrainedSize.max}}, size);
+  const RCLayout childLayout = CKComputeComponentLayout(_child, {minChildSize, {constrainedSize.max}}, size);
 
   // If we have an undetermined height or width, use the child size to define the layout
   // size
@@ -74,6 +90,18 @@
   };
 
   return {self, size, {{childPosition, childLayout}}};
+}
+
+#pragma mark - CKMountable
+
+- (unsigned int)numberOfChildren
+{
+  return RCIterable::numberOfChildren(_child);
+}
+
+- (id<CKMountable>)childAtIndex:(unsigned int)index
+{
+  return RCIterable::childAtIndex(self, index, _child);
 }
 
 @end

@@ -10,7 +10,13 @@
 
 #import "CKStaticLayoutComponent.h"
 
-#import "ComponentUtilities.h"
+#include <algorithm>
+
+#import <ComponentKit/CKComponentInternal.h>
+#import <ComponentKit/CKMacros.h>
+#import <ComponentKit/CKFunctionalHelpers.h>
+#import <ComponentKit/CKSizeAssert.h>
+
 #import "CKComponentSubclass.h"
 
 @implementation CKStaticLayoutComponent
@@ -20,21 +26,35 @@
 
 + (instancetype)newWithView:(const CKComponentViewConfiguration &)view
                        size:(const CKComponentSize &)size
-                   children:(const std::vector<CKStaticLayoutComponentChild> &)children
+                   children:(RCContainerWrapper<std::vector<CKStaticLayoutComponentChild>> &&)children
 {
   CKStaticLayoutComponent *c = [super newWithView:view size:size];
   if (c) {
-    c->_children = children;
+    c->_children = children.take();
   }
   return c;
 }
 
-+ (instancetype)newWithChildren:(const std::vector<CKStaticLayoutComponentChild> &)children
++ (instancetype)newWithChildren:(RCContainerWrapper<std::vector<CKStaticLayoutComponentChild>> &&)children
 {
-  return [self newWithView:{} size:{} children:children];
+  return [self newWithView:{} size:{} children:std::move(children)];
 }
 
-- (CKComponentLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+- (unsigned int)numberOfChildren
+{
+  return (unsigned int)_children.size();
+}
+
+- (id<CKMountable>)childAtIndex:(unsigned int)index
+{
+  if (index < _children.size()) {
+    return _children[index].component;
+  }
+  CKFailAssertWithCategory(self.className, @"Index %u is out of bounds %u", index, [self numberOfChildren]);
+  return nil;
+}
+
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
 {
   CGSize size = {
     isinf(constrainedSize.max.width) ? kCKComponentParentDimensionUndefined : constrainedSize.max.width,
@@ -44,11 +64,12 @@
   auto layoutChildren = CK::map(_children, [&constrainedSize, &size](CKStaticLayoutComponentChild child) {
 
     CGSize autoMaxSize = {
-      constrainedSize.max.width - child.position.x,
-      constrainedSize.max.height - child.position.y
+      std::max(constrainedSize.max.width - child.position.x, (CGFloat)0),
+      std::max(constrainedSize.max.height - child.position.y, (CGFloat)0)
     };
     CKSizeRange childConstraint = child.size.resolveSizeRange(size, {{0,0}, autoMaxSize});
-    return CKComponentLayoutChild({child.position, CKComputeComponentLayout(child.component, childConstraint, size)});
+    CKAssertSizeRange(childConstraint);
+    return RCLayoutChild({child.position, CKComputeComponentLayout(child.component, childConstraint, size)});
   });
 
   if (isnan(size.width)) {

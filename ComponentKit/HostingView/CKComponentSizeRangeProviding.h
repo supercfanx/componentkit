@@ -9,10 +9,19 @@
  */
 
 #import <Foundation/Foundation.h>
+#import <CoreGraphics/CoreGraphics.h>
 
-#import <ComponentKit/CKDimension.h>
+#import <ComponentKit/CKDefines.h>
+#import <ComponentKit/CKSizeRange_SwiftBridge.h>
+
+typedef CKSizeRange_SwiftBridge * _Nonnull(^CKComponentSizeRangeProviderBlock)(CGSize);
+
+#if defined(__cplusplus)
+#import <ComponentKit/CKSizeRange.h>
+#endif
 
 @protocol CKComponentSizeRangeProviding <NSObject>
+#if defined(__cplusplus)
 @required
 /**
  Called when the layout of an `CKComponentHostingView` is dirtied.
@@ -21,4 +30,5 @@
  size of a component.
  */
 - (CKSizeRange)sizeRangeForBoundingSize:(CGSize)size;
+#endif
 @end

@@ -8,14 +8,25 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
 #import <Foundation/Foundation.h>
 
+#import <ComponentKit/CKComponentContext.h>
+#import <ComponentKit/CKComponentScopeTypes.h>
 #import <ComponentKit/CKUpdateMode.h>
+
+#include <memory>
 
 class CKThreadLocalComponentScope;
 @class CKComponentScopeHandle;
+@protocol CKTreeNodeWithChildrenProtocol;
 
-typedef void (^CKComponentStateUpdater)(id (^)(id), CKUpdateMode mode);
+typedef void (^CKComponentStateUpdater)(id (^updateBlock)(id),
+                                        NSDictionary<NSString *, id> * userInfo,
+                                        CKUpdateMode mode);
 
 /**
  Components have local "state" that is independent of the values passed into its +new method. Components can update
@@ -49,12 +60,15 @@ public:
                               for why this is usually a bad idea:
                               http://facebook.github.io/react/tips/props-in-getInitialState-as-anti-pattern.html
    */
-  CKComponentScope(Class __unsafe_unretained componentClass, id identifier = nil, id (^initialStateCreator)(void) = nil) noexcept;
+  explicit CKComponentScope(Class __unsafe_unretained componentClass, id identifier = nil, id (^initialStateCreator)(void) = nil) noexcept;
 
   ~CKComponentScope();
 
   /** @return The current state for the component being built. */
   id state(void) const noexcept;
+
+  /** @return The scope identifer for the component being built. */
+  CKComponentScopeHandleIdentifier identifier(void) const noexcept;
 
   /**
    @return A block that schedules a state update when invoked.
@@ -72,9 +86,27 @@ public:
    */
   CKComponentScopeHandle *scopeHandle(void) const noexcept;
 
+  /**
+   Replaces the state for a scope *without* scheduling a state update and triggering another render pass.
+   This can only be called during component construction, not afterwards.
+
+   Use this rarely! Ideally props and state should be logically separate, and updating one should not affect the other.
+   In rare cases, however, they may be inextricably linked. An example: suppose props contains a list of items, and
+   state contains a "selected item identifier." If the selected item is removed from the list in props, you may realize
+   in +new that props and state are out of sync; this function allows you to "fix" state without triggering another
+   separate re-render pass.
+
+   The analogous feature in React is getDerivedStateFromProps, which allows you to update state in response to
+   props changing.
+   */
+  static void replaceState(const CKComponentScope &scope, id newState) noexcept;
+
 private:
   CKComponentScope(const CKComponentScope&) = delete;
   CKComponentScope &operator=(const CKComponentScope&) = delete;
   CKThreadLocalComponentScope *_threadLocalScope;
   CKComponentScopeHandle *_scopeHandle;
+  __unsafe_unretained id<CKTreeNodeWithChildrenProtocol> _parentNode;
 };
+
+#endif

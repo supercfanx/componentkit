@@ -8,6 +8,10 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
 #import <Foundation/Foundation.h>
 
 #import <ComponentKit/CKComponentInternal.h>
@@ -17,6 +21,7 @@
 
 @protocol CKComponentDebugReflowListener
 - (void)didReceiveReflowComponentsRequest;
+- (void)didReceiveReflowComponentsRequestWithTreeNodeIdentifier:(CKTreeNodeIdentifier)treeNodeIdentifier;
 @end
 
 /**
@@ -42,6 +47,11 @@
 + (void)reflowComponents;
 
 /**
+ Only reflow component tree that contains the tree node identifier.
+ */
++ (void)reflowComponentsWithTreeNodeIdentifier:(CKTreeNodeIdentifier)treeNodeIdentifier;
+
+/**
  Registers an object that will be notified when +reflowComponents is called. The listener is weakly held and will
  be messaged on the main thread.
  */
@@ -54,3 +64,5 @@ CK::Component::MountContext CKDebugMountContext(Class componentClass,
                                                 const CK::Component::MountContext &context,
                                                 const CKComponentViewConfiguration &viewConfiguration,
                                                 const CGSize size);
+
+#endif

@@ -12,28 +12,28 @@
 
 #import <ComponentKit/CKAssert.h>
 #import <ComponentKit/CKMacros.h>
+#import <ComponentKit/CKInternalHelpers.h>
 
-#import "CKInternalHelpers.h"
 #import "CKComponentInternal.h"
 #import "CKComponentSubclass.h"
-
-@interface CKCompositeComponent ()
-{
-  CKComponent *_component;
-}
-@end
+#import "CKIterableHelpers.h"
+#import "CKRenderHelpers.h"
+#import "CKComponentViewConfiguration_SwiftBridge+Internal.h"
 
 @implementation CKCompositeComponent
+{
+  id<CKMountable> _child;
+}
 
 #if DEBUG
 + (void)initialize
 {
   if (self != [CKCompositeComponent class]) {
-    CKAssert(!CKSubclassOverridesSelector([CKCompositeComponent class], self, @selector(computeLayoutThatFits:)),
+    CKAssert(!CKSubclassOverridesInstanceMethod([CKCompositeComponent class], self, @selector(computeLayoutThatFits:)),
              @"%@ overrides -computeLayoutThatFits: which is not allowed. "
              "Consider subclassing CKComponent directly if you need to perform custom layout.",
              self);
-    CKAssert(!CKSubclassOverridesSelector([CKCompositeComponent class], self, @selector(layoutThatFits:parentSize:)),
+    CKAssert(!CKSubclassOverridesInstanceMethod([CKCompositeComponent class], self, @selector(layoutThatFits:parentSize:)),
              @"%@ overrides -layoutThatFits:parentSize: which is not allowed. "
              "Consider subclassing CKComponent directly if you need to perform custom layout.",
              self);
@@ -41,45 +41,77 @@
 }
 #endif
 
-+ (instancetype)newWithComponent:(CKComponent *)component
+- (instancetype _Nullable)initWithView:(const CKComponentViewConfiguration &)view
+                             component:(id<CKMountable> _Nullable)component
+{
+  if (component == nil) {
+    return nil;
+  }
+
+  if (self = [super initWithView:view size:{}]) {
+    _child = component;
+  }
+  return self;
+}
+
+- (instancetype)initWithSwiftView:(CKComponentViewConfiguration_SwiftBridge *_Nullable)swiftView
+                        component:(id<CKMountable>)component
+{
+  const auto view = swiftView != nil ? swiftView.viewConfig : CKComponentViewConfiguration{};
+  return [self initWithView:view component:component];
+}
+
++ (instancetype)newWithComponent:(id<CKMountable>)component
 {
   return [self newWithView:{} component:component];
 }
 
-+ (instancetype)newWithView:(const CKComponentViewConfiguration &)view component:(CKComponent *)component
++ (instancetype)newWithView:(const CKComponentViewConfiguration &)view component:(id<CKMountable>)component
 {
-  if (!component) {
+  if (component == nil) {
     return nil;
   }
 
   CKCompositeComponent *c = [super newWithView:view size:{}];
-  if (c) {
-    c->_component = component;
+  if (c != nil) {
+    c->_child = component;
   }
+
   return c;
 }
 
-+ (instancetype)newWithView:(const CKComponentViewConfiguration &)view size:(const CKComponentSize &)size
-{
-  CK_NOT_DESIGNATED_INITIALIZER();
-}
-
-- (CKComponentLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
                           restrictedToSize:(const CKComponentSize &)size
                       relativeToParentSize:(CGSize)parentSize
 {
   CKAssert(size == CKComponentSize(),
            @"CKCompositeComponent only passes size {} to the super class initializer, but received size %@ "
-           "(component=%@)", size.description(), _component);
+           "(component=%@)", size.description(), _child);
 
-  CKComponentLayout l = [_component layoutThatFits:constrainedSize parentSize:parentSize];
-  return {self, l.size, {{{0,0}, l}}};
+  RCLayout l = [_child layoutThatFits:constrainedSize parentSize:parentSize];
+  const auto lSize = l.size;
+  return {self, lSize, {{{0,0}, std::move(l)}}};
+}
+
+- (id<CKMountable>)child
+{
+  return _child;
 }
 
 - (UIView *)viewForAnimation
 {
   // Delegate to the wrapped component's viewForAnimation if we don't have one.
-  return [super viewForAnimation] ?: [_component viewForAnimation];
+  return [super viewForAnimation] ?: [CKReturnIfResponds(_child, @selector(viewForAnimation)) viewForAnimation];
+}
+
+- (unsigned int)numberOfChildren
+{
+  return RCIterable::numberOfChildren(_child);
+}
+
+- (id<CKMountable>)childAtIndex:(unsigned int)index
+{
+  return RCIterable::childAtIndex(self, index, _child);
 }
 
 @end

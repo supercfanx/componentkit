@@ -8,7 +8,13 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
 #import <ComponentKit/CKCompositeComponent.h>
+
+NS_ASSUME_NONNULL_BEGIN
 
 struct CKComponentSize;
 
@@ -17,10 +23,18 @@ struct CKComponentSize;
  */
 @interface CKAutoSizedImageComponent : CKCompositeComponent
 
+CK_COMPOSITE_COMPONENT_INIT_UNAVAILABLE;
+
 /**
  Uses a static layout with the image's size and apply additional attributes.
  */
-+ (instancetype)newWithImage:(UIImage *)image
-                  attributes:(const CKViewComponentAttributeValueMap &)attributes;
+- (instancetype)initWithImage:(UIImage *)image
+                   attributes:(const CKViewComponentAttributeValueMap &)attributes;
 
 @end
+
+NS_ASSUME_NONNULL_END
+
+#import <ComponentKit/AutoSizedImageComponentBuilder.h>
+
+#endif

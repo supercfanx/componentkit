@@ -8,7 +8,11 @@
  *
  */
 
-#import <ComponentKit/CKAsyncTransactionContainer.h>
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
+#import <ComponentTextKit/CKAsyncTransactionContainer.h>
 
 @interface CALayer (CKAsyncTransactionContainerTransactions)
 @property (nonatomic, retain, setter = ck_setAsyncLayerTransactions:) NSHashTable *ck_asyncLayerTransactions;
@@ -17,3 +21,5 @@
 - (void)ck_asyncTransactionContainerWillBeginTransaction:(CKAsyncTransaction *)transaction;
 - (void)ck_asyncTransactionContainerDidCompleteTransaction:(CKAsyncTransaction *)transaction;
 @end
+
+#endif

@@ -1,4 +1,4 @@
-# [![ComponentKit](http://componentkit.org/static/componentkit-hero-logo.png)](http://componentkit.org/)
+# [![ComponentKit](http://componentkit.org/img/componentkit_hero_logo.png)](http://componentkit.org/)
 
 [![Build Status](https://travis-ci.org/facebook/componentkit.svg)](https://travis-ci.org/facebook/componentkit)
 
@@ -6,23 +6,28 @@ ComponentKit is a view framework for iOS that is heavily inspired by React. It t
 
 ### Quick start
 
-ComponentKit is available to install via [CocoaPods](http://cocoapods.org) or [Carthage](https://github.com/Carthage/Carthage). 
-
-If you are using CocoaPods, add the following to your [Podfile](https://guides.cocoapods.org/using/the-podfile.html):
-
-```ruby
-pod 'ComponentKit', '~> 0.15'
-```
-
-If you are using Carthage, add the following to your [Cartfile](https://github.com/Carthage/Carthage/blob/master/Documentation/Artifacts.md#cartfile):
+ComponentKit is available to install via [Carthage](https://github.com/Carthage/Carthage). To get started add the following to your [Cartfile](https://github.com/Carthage/Carthage/blob/master/Documentation/Artifacts.md#cartfile):
 
 ```
-github "facebook/ComponentKit" ~> 0.15
+github "facebook/ComponentKit" ~> 0.30
 ```
 
 ### Opening the Xcode projects
+ComponentKit has a few dependencies that need to be installed via [Carthage](https://github.com/Carthage/Carthage). **Before you open any of the Xcode projects in this repo, make sure you run**:
 
-If you want to try out ComponentKit just clone the GitHub repository and open the Xcode project. To get started with the example app:
+```
+carthage checkout
+```
+
+If Carthage isn't installed, you easily install it via Homebrew:
+
+```
+brew install carthage
+```
+If you can't use Homebrew, Carthage provides other [installation methods](https://github.com/Carthage/Carthage#installing-carthage).
+
+
+To get started with the example app:
 
 ```
 open Examples/WildeGuess/WildeGuess.xcodeproj
@@ -36,11 +41,9 @@ If you're interested in viewing only the ComponentKit source code in Xcode:
 open ComponentKit.xcodeproj
 ```
 
-There is no need to run any special commands prior to opening either Xcode project.
-
 ### Learn more
 
-* Read the [Getting Started guide](http://www.componentkit.org/docs/getting-started.html)
+* Read the [Getting Started guide](http://www.componentkit.org/docs/getting-started)
 * Get the [sample projects](https://github.com/facebook/componentkit/tree/master/Examples/WildeGuess)
 * Read the [objc.io article](http://www.objc.io/issue-22/facebook.html) by Adam Ernst
 * Watch the [@Scale talk](https://youtu.be/mLSeEoC6GjU?t=24m18s) by Ari Grant

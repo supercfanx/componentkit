@@ -8,6 +8,10 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
 #import <Foundation/Foundation.h>
 
 @class CKAsyncTransaction;
@@ -109,7 +113,6 @@ typedef NS_ENUM(NSUInteger, CKAsyncTransactionState) {
 /**
  @summary Adds a block to run on the completion of the async transaction.
 
- @param queue The dispatch queue on which to execute the block.
  @param completion The completion block that will be executed with the output of the execution block when all of the
  operations in the transaction are completed. Executed and released on callbackQueue.
  */
@@ -138,3 +141,5 @@ typedef NS_ENUM(NSUInteger, CKAsyncTransactionState) {
 - (void)commit;
 
 @end
+
+#endif

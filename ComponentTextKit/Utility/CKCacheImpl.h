@@ -8,10 +8,14 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
 #ifndef ComponentKit_CKCacheImpl_h
 #define ComponentKit_CKCacheImpl_h
 
-#import <ComponentKit/CKFunctor.h>
+#import <ComponentTextKit/CKFunctor.h>
 #import <ComponentKit/CKAssert.h>
 
 #import <CoreGraphics/CoreGraphics.h>
@@ -615,4 +619,5 @@ namespace CK {
 };// end namespace CK
 
 
+#endif
 #endif

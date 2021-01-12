@@ -10,8 +10,6 @@
 
 #import <XCTest/XCTest.h>
 
-#import <OCMock/OCMock.h>
-
 #import <ComponentKit/CKComponent+UIView.h>
 #import <ComponentKit/CKComponent.h>
 #import <ComponentKit/CKComponentDelegateAttribute.h>
@@ -20,15 +18,16 @@
 #import <ComponentKit/CKComponentInternal.h>
 #import <ComponentKit/CKCompositeComponent.h>
 
+#import "CKComponentTestCase.h"
 
 @interface CKDetectScrollComponent : CKCompositeComponent <UIScrollViewDelegate>
 @property (nonatomic, assign) BOOL receivedScroll;
 @end
 
-@interface CKComponentGestureActionsTests : XCTestCase
+@interface CKComponentGestureActionsTests : CKComponentTestCase
 @end
 
-@interface CKComponentDelegateAttributeTests : XCTestCase
+@interface CKComponentDelegateAttributeTests : CKComponentTestCase
 @end
 
 @implementation CKComponentDelegateAttributeTests
@@ -65,15 +64,15 @@ static UIScrollView *findScrollView(UIView *v)
 {
   CKDetectScrollComponent *hierarchy =
   [CKDetectScrollComponent
-   newWithComponent:[CKComponent
-                     newWithView:{[UIScrollView class],
-                       {CKComponentDelegateAttribute(@selector(setDelegate:), {
+   newWithComponent:CK::ComponentBuilder()
+                        .viewClass([UIScrollView class])
+                        .attribute(CKComponentDelegateAttribute(@selector(setDelegate:), {
                          @selector(scrollViewDidScroll:),
-                       })}}
-                     size:{}]];
+                       }))
+                        .build()];
 
 
-  CKComponentLayout layout = [hierarchy layoutThatFits:{} parentSize:{NAN, NAN}];
+  RCLayout layout = [hierarchy layoutThatFits:{} parentSize:{NAN, NAN}];
 
   UIView *container = [UIView new];
   NSSet *mounted = CKMountComponentLayout(layout, container, nil, nil);
@@ -92,10 +91,10 @@ static UIScrollView *findScrollView(UIView *v)
 
   CKDetectScrollComponent *noScrollHierarchy =
   [CKDetectScrollComponent
-   newWithComponent:[CKComponent
-                     newWithView:{[UIScrollView class],
-                       {CKComponentDelegateAttribute(@selector(setDelegate:), {})}}
-                     size:{}]];
+   newWithComponent:CK::ComponentBuilder()
+                        .viewClass([UIScrollView class])
+                        .attribute(CKComponentDelegateAttribute(@selector(setDelegate:), {}))
+                        .build()];
 
   layout = [noScrollHierarchy layoutThatFits:{} parentSize:{NAN, NAN}];
 
@@ -114,15 +113,15 @@ static UIScrollView *findScrollView(UIView *v)
 {
   CKDetectScrollComponent *hierarchy =
   [CKDetectScrollComponent
-   newWithComponent:[CKComponent
-                     newWithView:{[UIScrollView class],
-                       {CKComponentDelegateAttribute(@selector(setDelegate:), {
+   newWithComponent:CK::ComponentBuilder()
+                        .viewClass([UIScrollView class])
+                        .attribute(CKComponentDelegateAttribute(@selector(setDelegate:), {
                          @selector(scrollViewDidScroll:),
-                       })}}
-                     size:{}]];
+                       }))
+                        .build()];
 
 
-  CKComponentLayout layout = [hierarchy layoutThatFits:{} parentSize:{NAN, NAN}];
+  RCLayout layout = [hierarchy layoutThatFits:{} parentSize:{NAN, NAN}];
 
   UIView *container = [UIView new];
   NSSet *mounted = CKMountComponentLayout(layout, container, nil, nil);

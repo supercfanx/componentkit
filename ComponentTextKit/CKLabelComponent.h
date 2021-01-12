@@ -8,7 +8,12 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
 #import <ComponentKit/CKCompositeComponent.h>
+
+NS_ASSUME_NONNULL_BEGIN
+
+#if CK_NOT_SWIFT
 
 struct CKLabelAttributes
 {
@@ -50,6 +55,8 @@ struct CKLabelAttributes
   CGFloat paragraphSpacingBefore;
 };
 
+#endif
+
 /**
  CKLabelComponent is a simplified text component that just displays NSStrings.
  
@@ -60,15 +67,54 @@ struct CKLabelAttributes
  for you.
    
  @see CKTextComponent for advanced text usages like link tapping.
- 
+ */
+NS_SWIFT_NAME(LabelComponent)
+@interface CKLabelComponent : CKCompositeComponent
+
+CK_COMPOSITE_COMPONENT_INIT_UNAVAILABLE;
+
+#if CK_NOT_SWIFT
+
+- (instancetype)initWithLabelAttributes:(const CKLabelAttributes &)attributes
+                         viewAttributes:(const CKViewComponentAttributeValueMap &)viewAttributes
+                                   size:(const CKComponentSize &)size NS_DESIGNATED_INITIALIZER;
+
+/**
  @param attributes The content and styling information for the text component.
  @param viewAttributes These are passed directly to CKTextComponent and its backing view.
  @param size The component size or {} for the default which is for the layout to take the maximum space available.
  */
-@interface CKLabelComponent : CKCompositeComponent
-
 + (instancetype)newWithLabelAttributes:(const CKLabelAttributes &)attributes
                         viewAttributes:(const CKViewComponentAttributeValueMap &)viewAttributes
                                   size:(const CKComponentSize &)size;
 
+#else
+
+- (instancetype)initWithText:(NSString *)text
+            truncationString:(NSString *_Nullable)truncationString
+                        font:(UIFont *_Nullable)font
+                       color:(UIColor *_Nullable)color
+               lineBreakMode:(NSLineBreakMode)lineBreakMode
+        maximumNumberOfLines:(NSUInteger)maximumNumberOfLines
+                shadowOffset:(CGSize)shadowOffset
+                 shadowColor:(UIColor *_Nullable)shadowColor
+               shadowOpacity:(CGFloat)shadowOpacity
+                shadowRadius:(CGFloat)shadowRadius
+                   alignment:(NSTextAlignment)alignment
+         firstLineHeadIndent:(CGFloat)firstLineHeadIndent
+                  headIndent:(CGFloat)headIndent
+                  tailIndent:(CGFloat)tailIndent
+          lineHeightMultiple:(CGFloat)lineHeightMultiple
+           maximumLineHeight:(CGFloat)maximumLineHeight
+           minimumLineHeight:(CGFloat)minimumLineHeight
+                 lineSpacing:(CGFloat)lineSpacing
+            paragraphSpacing:(CGFloat)paragraphSpacing
+      paragraphSpacingBefore:(CGFloat)paragraphSpacingBefore
+                   swiftSize:(CKComponentSize_SwiftBridge *_Nullable)swiftSize
+             swiftAttributes:(NSArray<CKComponentViewAttribute_SwiftBridge *> *_Nullable)attributes NS_DESIGNATED_INITIALIZER NS_REFINED_FOR_SWIFT;
+
+#endif
+
 @end
+
+NS_ASSUME_NONNULL_END

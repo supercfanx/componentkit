@@ -12,13 +12,15 @@
 
 #import <OCMock/OCMock.h>
 
+#import <ComponentKit/CKBuildComponent.h>
 #import <ComponentKit/CKComponentController.h>
 #import <ComponentKit/CKComponentSubclass.h>
 #import <ComponentKit/CKCompositeComponent.h>
 #import <ComponentKit/CKComponentScope.h>
 #import <ComponentKit/CKComponentInternal.h>
-#import <ComponentKit/CKComponentScopeFrame.h>
 #import <ComponentKit/CKComponentScopeRoot.h>
+#import <ComponentKit/CKComponentScopeRootFactory.h>
+#import <ComponentKit/CKRootTreeNode.h>
 #import <ComponentKit/CKThreadLocalComponentScope.h>
 
 #import "CKStateExposingComponent.h"
@@ -56,10 +58,10 @@
 
 - (void)testThreadLocalStateIsSet
 {
-  CKComponentScopeRoot *root = [CKComponentScopeRoot rootWithListener:nil];
+  auto const root = CKComponentScopeRootWithDefaultPredicates(nil, nil);
 
   CKComponent *(^block)(void) = ^CKComponent *{
-    XCTAssertEqualObjects(CKThreadLocalComponentScope::currentScope()->stack.top().equivalentPreviousFrame, root.rootFrame);
+    XCTAssertEqualObjects(CKThreadLocalComponentScope::currentScope()->stack.top().previousNode, [root rootNode].node());
     return [CKComponent new];
   };
 
@@ -74,7 +76,7 @@
     return c;
   };
 
-  const CKBuildComponentResult result = CKBuildComponent([CKComponentScopeRoot rootWithListener:nil], {}, block);
+  const CKBuildComponentResult result = CKBuildComponent(CKComponentScopeRootWithDefaultPredicates(nil, nil), {}, block);
   XCTAssertEqualObjects(result.component, c);
 }
 
@@ -88,7 +90,7 @@
     return [CKComponent new];
   };
 
-  const CKBuildComponentResult firstBuildResult = CKBuildComponent([CKComponentScopeRoot rootWithListener:nil], {}, block);
+  const CKBuildComponentResult firstBuildResult = CKBuildComponent(CKComponentScopeRootWithDefaultPredicates(nil, nil), {}, block);
 
   id __block nextState = nil;
   CKComponent *(^block2)(void) = ^CKComponent *{
@@ -102,19 +104,17 @@
   XCTAssertEqualObjects(state, nextState);
 }
 
-#pragma mark - CKComponentScopeFrameForComponent
-
 - (void)testComponentStateIsSetToInitialStateValue
 {
   CKComponent *(^block)(void) = ^CKComponent *{
     return [CKStateExposingComponent new];
   };
 
-  CKStateExposingComponent *component = (CKStateExposingComponent *)CKBuildComponent([CKComponentScopeRoot rootWithListener:nil], {}, block).component;
+  CKStateExposingComponent *component = (CKStateExposingComponent *)CKBuildComponent(CKComponentScopeRootWithDefaultPredicates(nil, nil), {}, block).component;
   XCTAssertEqualObjects(component.state, [CKStateExposingComponent initialState]);
 }
 
-- (void)testStateScopeFrameIsNotFoundForComponentWhenClassNamesDoNotMatch
+- (void)testStatUniqueIdentifierIsNotFoundForComponentWhenClassNamesDoNotMatch
 {
   id state = @12345;
 
@@ -125,11 +125,11 @@
     return c;
   };
 
-  CKComponent *component = CKBuildComponent([CKComponentScopeRoot rootWithListener:nil], {}, block).component;
-  XCTAssertNil(component.scopeFrameToken);
+  CKComponent *component = CKBuildComponent(CKComponentScopeRootWithDefaultPredicates(nil, nil), {}, block).component;
+  XCTAssertNil(component.uniqueIdentifier);
 }
 
-- (void)testStateScopeFrameIsNotFoundWhenAnotherComponentInTheSameScopeAcquiresItFirst
+- (void)testStateUniqueIdentifierIsNotFoundWhenAnotherComponentInTheSameScopeAcquiresItFirst
 {
   CKComponent __block *innerComponent = nil;
 
@@ -144,9 +144,9 @@
     return [CKComponent new];
   };
 
-  CKComponent *outerComponent = CKBuildComponent([CKComponentScopeRoot rootWithListener:nil], {}, block).component;
-  XCTAssertNotNil(innerComponent.scopeFrameToken);
-  XCTAssertNil(outerComponent.scopeFrameToken);
+  CKComponent *outerComponent = CKBuildComponent(CKComponentScopeRootWithDefaultPredicates(nil, nil), {}, block).component;
+  XCTAssertNotNil(innerComponent.uniqueIdentifier);
+  XCTAssertNil(outerComponent.uniqueIdentifier);
 }
 
 @end

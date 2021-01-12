@@ -8,14 +8,22 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
 #import <UIKit/UIKit.h>
 
-typedef NS_ENUM(NSUInteger, CKComponentBoundsAnimationMode) {
+#import <ComponentKit/CKAssert.h>
+
+typedef NS_ENUM(NSInteger, CKComponentBoundsAnimationMode) {
   /** Wraps changes in a UIView animation block */
   CKComponentBoundsAnimationModeDefault = 0,
   /** Wraps changes in a UIView spring animation block */
   CKComponentBoundsAnimationModeSpring,
 };
+
+@class CKComponent;
 
 /**
  Specifies how to animate a change to the component tree.
@@ -39,11 +47,20 @@ struct CKComponentBoundsAnimation {
   CKComponentBoundsAnimationMode mode;
   UIViewAnimationOptions options;
 
+  /** `UIViewAnimationOptionCurve` in `options` will be ignored if this is specified */
+  CAMediaTimingFunction *timingFunction;
   /** Ignored unless mode is Spring, in which case it specifies the damping ratio passed to UIKit. */
   CGFloat springDampingRatio;
   /** Ignored unless mode is Spring, in which case it specifies the initial velocity passed to UIKit. */
   CGFloat springInitialVelocity;
+#if CK_ASSERTIONS_ENABLED
+  __weak CKComponent *component;
+#endif
+  void (^completion)();
 };
+
+auto operator ==(const CKComponentBoundsAnimation &lhs, const CKComponentBoundsAnimation &rhs) -> bool;
+auto operator !=(const CKComponentBoundsAnimation &lhs, const CKComponentBoundsAnimation &rhs) -> bool;
 
 /**
  Wraps the given block in the correct UIView animation block for a given bounds animation.
@@ -54,3 +71,5 @@ struct CKComponentBoundsAnimation {
 void CKComponentBoundsAnimationApply(const CKComponentBoundsAnimation &animation,
                                      void (^animations)(void),
                                      void (^completion)(BOOL finished));
+
+#endif

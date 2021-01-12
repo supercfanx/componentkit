@@ -8,12 +8,16 @@
  *
  */
 
-#import <vector>
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
 
 #import <Foundation/Foundation.h>
 
-#import <ComponentKit/CKComponent.h>
+#import <ComponentKit/RCContainerWrapper.h>
 #import <ComponentKit/CKDimension.h>
+#import <ComponentKit/CKLayoutComponent.h>
+#import <ComponentKit/CKMacros.h>
 
 struct CKStaticLayoutComponentChild {
   CGPoint position;
@@ -29,12 +33,18 @@ struct CKStaticLayoutComponentChild {
   CKRelativeSizeRange size;
 };
 
-/*
+/**
+ @uidocs https://fburl.com/CKStaticLayoutComponent:0a97
+
  A component that positions children at fixed positions.
 
  Computes a size that is the union of all childrens' frames.
  */
-@interface CKStaticLayoutComponent : CKComponent
+@interface CKStaticLayoutComponent : CKLayoutComponent
+
+CK_INIT_UNAVAILABLE;
+
+CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
 
 /**
  @param view Passed to the super class initializer.
@@ -42,11 +52,13 @@ struct CKStaticLayoutComponentChild {
  */
 + (instancetype)newWithView:(const CKComponentViewConfiguration &)view
                        size:(const CKComponentSize &)size
-                   children:(const std::vector<CKStaticLayoutComponentChild> &)children;
+                   children:(RCContainerWrapper<std::vector<CKStaticLayoutComponentChild>> &&)children;
 
 /**
  Convenience that does not have a view or size.
  */
-+ (instancetype)newWithChildren:(const std::vector<CKStaticLayoutComponentChild> &)children;
++ (instancetype)newWithChildren:(RCContainerWrapper<std::vector<CKStaticLayoutComponentChild>> &&)children;
 
 @end
+
+#endif

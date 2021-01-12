@@ -10,15 +10,20 @@
 
 #import <UIKit/UIKit.h>
 
-#import <ComponentKit/CKComponent.h>
+#import <ComponentKit/CKLayoutComponent.h>
+
+NS_ASSUME_NONNULL_BEGIN
 
 /**
+ @uidocs https://fburl.com/CKInsetComponent:ac83
+
  A component that wraps another component, applying insets around it.
 
  If the child component has a size specified as a percentage, the percentage is resolved against this component's parent
  size **after** applying insets.
 
- @example CKOuterComponent contains an CKInsetComponent with an CKInnerComponent. Suppose that:
+ @note
+ CKOuterComponent contains an CKInsetComponent with an CKInnerComponent. Suppose that:
  - CKOuterComponent is 200pt wide.
  - CKInnerComponent specifies its width as 100%.
  - The CKInsetComponent has insets of 10pt on every side.
@@ -27,20 +32,58 @@
  If you're familiar with CSS: CKInsetComponent's child behaves similarly to "box-sizing: border-box".
 
  An infinite inset is resolved as an inset equal to all remaining space after applying the other insets and child size.
- @example An CKInsetComponent with an infinite left inset and 10px for all other edges will position it's child 10px from the right edge.
+ @note
+ An CKInsetComponent with an infinite left inset and 10px for all other edges will position it's child 10px from the right edge.
  */
-@interface CKInsetComponent : CKComponent
+NS_SWIFT_NAME(InsetComponent)
+@interface CKInsetComponent : CKLayoutComponent
 
-/** Convenience that calls +newWithView:insets:component: with {} for view. */
-+ (instancetype)newWithInsets:(UIEdgeInsets)insets component:(CKComponent *)child;
+CK_INIT_UNAVAILABLE;
+
+CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
+
+#if CK_SWIFT
+
+/**
+ @param swiftView Passed to CKComponent -initWithView:size:. The view, if any, will extend outside the insets.
+ @param insets The amount of space to inset on each side.
+ @param component The wrapped child component to inset. If nil, this method returns nil.
+ */
+- (instancetype)initWithSwiftView:(CKComponentViewConfiguration_SwiftBridge *_Nullable)swiftView
+                              top:(CKDimension_SwiftBridge *)top
+                             left:(CKDimension_SwiftBridge *)left
+                           bottom:(CKDimension_SwiftBridge *)bottom
+                            right:(CKDimension_SwiftBridge *)right
+                        component:(CKComponent *_Nullable)component NS_DESIGNATED_INITIALIZER;
+
+#else
 
 /**
  @param view Passed to CKComponent +newWithView:size:. The view, if any, will extend outside the insets.
  @param insets The amount of space to inset on each side.
  @param component The wrapped child component to inset. If nil, this method returns nil.
  */
-+ (instancetype)newWithView:(const CKComponentViewConfiguration &)view
-                     insets:(UIEdgeInsets)insets
-                  component:(CKComponent *)component;
+- (instancetype)initWithView:(const CKComponentViewConfiguration &)view
+                         top:(CKRelativeDimension)top
+                        left:(CKRelativeDimension)left
+                      bottom:(CKRelativeDimension)bottom
+                       right:(CKRelativeDimension)right
+                   component:(CKComponent *_Nullable)component NS_DESIGNATED_INITIALIZER;
+
+/**
+ @param insets The amount of space to inset on each side.
+ @param component The wrapped child component to inset. If nil, this method returns nil.
+ */
+- (instancetype)initWithTop:(CKRelativeDimension)top
+                       left:(CKRelativeDimension)left
+                     bottom:(CKRelativeDimension)bottom
+                      right:(CKRelativeDimension)right
+                  component:(CKComponent *_Nullable)component;
+
+#endif
 
 @end
+
+NS_ASSUME_NONNULL_END
+
+#import <ComponentKit/InsetComponentBuilder.h>

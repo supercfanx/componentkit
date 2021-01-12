@@ -8,12 +8,19 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
 #import <Foundation/Foundation.h>
 
 #import <ComponentKit/CKComponentViewConfiguration.h>
 
 @class CKComponent;
+@class CKComponentRootView;
 @class UIView;
+
+struct RCLayout;
 
 /**
  CKComponentHierarchyDebugHelper allows
@@ -27,3 +34,5 @@
 + (NSString *)componentHierarchyDescription NS_EXTENSION_UNAVAILABLE("Recursively describes components using -[UIApplication keyWindow]");
 
 @end
+
+#endif

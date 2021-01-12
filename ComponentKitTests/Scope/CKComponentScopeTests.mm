@@ -12,11 +12,64 @@
 
 #import <ComponentKit/CKCompositeComponent.h>
 
+#import <ComponentKit/CKCollection.h>
 #import <ComponentKit/CKComponentScope.h>
-#import <ComponentKit/CKComponentScopeFrame.h>
 #import <ComponentKit/CKComponentScopeHandle.h>
 #import <ComponentKit/CKComponentScopeRoot.h>
+#import <ComponentKit/CKComponentScopeRootFactory.h>
+#import <ComponentKit/CKComponentProtocol.h>
+#import <ComponentKit/CKComponentControllerProtocol.h>
+#import <ComponentKit/CKComponentInternal.h>
+#import <ComponentKit/CKRenderComponent.h>
+#import <ComponentKit/CKRootTreeNode.h>
 #import <ComponentKit/CKThreadLocalComponentScope.h>
+
+#import <ComponentKit/CKTreeNode.h>
+
+@protocol TestScopedProtocol <NSObject>
+@end
+
+@interface TestComponentWithScopedProtocol : NSObject <CKComponentProtocol, TestScopedProtocol>
+@end
+@implementation TestComponentWithScopedProtocol
++ (id)initialState { return nil; }
++ (Class<CKComponentControllerProtocol>)controllerClass
+{ return nil; };
+- (id<CKComponentControllerProtocol>)buildController
+{ return nil; }
+- (NSString *)className
+{ return @""; }
+- (const char *)typeName
+{ return ""; }
++ (RCComponentCoalescingMode)coalescingMode
+{ return RCComponentCoalescingModeNone; }
+@end
+
+@interface TestComponentWithoutScopedProtocol : NSObject <CKComponentProtocol>
+@end
+@implementation TestComponentWithoutScopedProtocol
++ (id)initialState { return nil; }
++ (Class<CKComponentControllerProtocol>)controllerClass
+{ return nil; };
+- (id<CKComponentControllerProtocol>)buildController
+{ return nil; }
+- (NSString *)className
+{ return @""; }
+- (const char *)typeName
+{ return ""; }
++ (RCComponentCoalescingMode)coalescingMode
+{ return RCComponentCoalescingModeNone; }
+@end
+
+@interface TestComponentControllerWithScopedProtocol : NSObject <CKComponentControllerProtocol, TestScopedProtocol>
+@end
+@implementation TestComponentControllerWithScopedProtocol
+- (instancetype)initWithComponent:(id<CKComponentProtocol>)component
+{
+  return [super init];
+}
+- (id<CKComponentProtocol>)component { return [CKComponent new]; }
+@end
 
 @interface CKComponentScopeTests : XCTestCase
 @end
@@ -32,68 +85,64 @@
 
 - (void)testThreadLocalComponentScopeIsNotEmptyWhenTheScopeExists
 {
-  CKThreadLocalComponentScope threadScope([CKComponentScopeRoot rootWithListener:nil], {});
+  CKThreadLocalComponentScope threadScope(CKComponentScopeRootWithDefaultPredicates(nil, nil), {});
   XCTAssertTrue(CKThreadLocalComponentScope::currentScope() != nullptr);
 }
 
 - (void)testThreadLocalComponentScopeStoresTheProvidedFrameAsTheEquivalentPreviousFrame
 {
-  CKComponentScopeRoot *root = [CKComponentScopeRoot rootWithListener:nil];
+  CKComponentScopeRoot *root = CKComponentScopeRootWithDefaultPredicates(nil, nil);
   CKThreadLocalComponentScope threadScope(root, {});
-  XCTAssertEqualObjects(CKThreadLocalComponentScope::currentScope()->stack.top().equivalentPreviousFrame, root.rootFrame);
+  XCTAssertEqualObjects(CKThreadLocalComponentScope::currentScope()->stack.top().previousNode, root.rootNode.node());
 }
 
 - (void)testThreadLocalComponentScopePushesChildComponentScope
 {
-  CKComponentScopeRoot *root = [CKComponentScopeRoot rootWithListener:nil];
+  CKComponentScopeRoot *root = CKComponentScopeRootWithDefaultPredicates(nil, nil);
   CKThreadLocalComponentScope threadScope(root, {});
-  CKComponentScopeFrame *rootFrame = CKThreadLocalComponentScope::currentScope()->stack.top().frame;
+  CKScopeTreeNode *rootFrame = CKThreadLocalComponentScope::currentScope()->stack.top().node;
   CKComponentScope scope([CKCompositeComponent class]);
-  CKComponentScopeFrame *currentFrame = CKThreadLocalComponentScope::currentScope()->stack.top().frame;
+  CKScopeTreeNode *currentFrame = CKThreadLocalComponentScope::currentScope()->stack.top().node;
   XCTAssertTrue(currentFrame != rootFrame);
 }
 
-- (void)testThreadLocalComponentScopeCanBeOverridden
+- (void)testThreadLocalComponentScopeCanBeNested
 {
-  CKComponentScopeRoot *root = [CKComponentScopeRoot rootWithListener:nil];
-  CKThreadLocalComponentScope threadScope(root, {});
-  CKThreadLocalComponentScope *threadScopePtr = &threadScope;
+  {
+    CKComponentScopeRoot *root = CKComponentScopeRootWithDefaultPredicates(nil, nil);
+    CKThreadLocalComponentScope threadScope(root, {});
 
-  dispatch_semaphore_t sema = dispatch_semaphore_create(0);
-  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-    XCTAssertTrue(CKThreadLocalComponentScope::currentScope() == nullptr);
     {
-      CKThreadLocalComponentScopeOverride scopeOverride(threadScopePtr);
-      XCTAssertEqual(CKThreadLocalComponentScope::currentScope(), threadScopePtr);
+      CKComponentScopeRoot *root2 = CKComponentScopeRootWithDefaultPredicates(nil, nil);
+      CKThreadLocalComponentScope threadScope2(root2, {});
+      XCTAssertEqual(CKThreadLocalComponentScope::currentScope(), &threadScope2);
     }
-    XCTAssertTrue(CKThreadLocalComponentScope::currentScope() == nullptr);
-    dispatch_semaphore_signal(sema);
-  });
-  dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC));
-  dispatch_semaphore_wait(sema, timeout);
 
-  XCTAssertEqual(CKThreadLocalComponentScope::currentScope(), threadScopePtr);
+    XCTAssertEqual(CKThreadLocalComponentScope::currentScope(), &threadScope);
+  }
+
+  XCTAssertEqual(CKThreadLocalComponentScope::currentScope(), nullptr);
 }
 
 #pragma mark - Component Scope Frame
 
 - (void)testComponentScopeFrameIsPoppedWhenComponentScopeCloses
 {
-  CKComponentScopeRoot *root = [CKComponentScopeRoot rootWithListener:nil];
+  CKComponentScopeRoot *root = CKComponentScopeRootWithDefaultPredicates(nil, nil);
   CKThreadLocalComponentScope threadScope(root, {});
-  CKComponentScopeFrame *rootFrame = CKThreadLocalComponentScope::currentScope()->stack.top().frame;
+  CKScopeTreeNode *rootFrame = CKThreadLocalComponentScope::currentScope()->stack.top().node;
   {
     CKComponentScope scope([CKCompositeComponent class], @"moose");
-    XCTAssertTrue(CKThreadLocalComponentScope::currentScope()->stack.top().frame != rootFrame);
+    XCTAssertTrue(CKThreadLocalComponentScope::currentScope()->stack.top().node != rootFrame);
   }
-  XCTAssertEqual(CKThreadLocalComponentScope::currentScope()->stack.top().frame, rootFrame);
+  XCTAssertEqual(CKThreadLocalComponentScope::currentScope()->stack.top().node, rootFrame);
 }
 
 #pragma mark - Component Scope State
 
 - (void)testComponentScopeStateIsAcquiredFromPreviousComponentScopeStateOneLevelDown
 {
-  CKComponentScopeRoot *root1 = [CKComponentScopeRoot rootWithListener:nil];
+  CKComponentScopeRoot *root1 = CKComponentScopeRootWithDefaultPredicates(nil, nil);
   CKComponentScopeRoot *root2;
   {
     CKThreadLocalComponentScope threadScope(root1, {});
@@ -118,9 +167,31 @@
   }
 }
 
+- (void)testComponentScopeReplaceStatePropagatesStateToNextComponentScopeState
+{
+  CKComponentScopeRoot *root1 = CKComponentScopeRootWithDefaultPredicates(nil, nil);
+  CKComponentScopeRoot *root2;
+  {
+    CKThreadLocalComponentScope threadScope(root1, {});
+    {
+      CKComponentScope scope([CKCompositeComponent class], @"macaque", ^{ return @42; });
+      CKComponentScope::replaceState(scope, @100);
+      XCTAssertEqualObjects(scope.state(), @100);
+    }
+    root2 = CKThreadLocalComponentScope::currentScope()->newScopeRoot;
+  }
+  {
+    CKThreadLocalComponentScope threadScope(root2, {});
+    {
+      CKComponentScope scope([CKCompositeComponent class], @"macaque", ^{ return @365; });
+      XCTAssertEqualObjects(scope.state(), @100);
+    }
+  }
+}
+
 - (void)testComponentScopeStateIsAcquiredFromPreviousComponentScopeStateOneLevelDownWithSibling
 {
-  CKComponentScopeRoot *root1 = [CKComponentScopeRoot rootWithListener:nil];
+  CKComponentScopeRoot *root1 = CKComponentScopeRootWithDefaultPredicates(nil, nil);
   CKComponentScopeRoot *root2;
   {
     CKThreadLocalComponentScope threadScope(root1, {});
@@ -153,7 +224,7 @@
 
 - (void)testComponentScopeStateIsAcquiredFromPreviousComponentScopeStateOneLevelDownWithSiblingThatDoesNotAcquire
 {
-  CKComponentScopeRoot *root1 = [CKComponentScopeRoot rootWithListener:nil];
+  CKComponentScopeRoot *root1 = CKComponentScopeRootWithDefaultPredicates(nil, nil);
   CKComponentScopeRoot *root2;
   {
     CKThreadLocalComponentScope threadScope(root1, {});
@@ -183,18 +254,33 @@
   }
 }
 
+#pragma mark - Test Component Scope Identifier
+
+- (void)testComponentScopeIdentifierIsSameAsScopeHandleGlobalIdentifier
+{
+  CKComponentScopeRoot *root1 = CKComponentScopeRootWithDefaultPredicates(nil, nil);
+  {
+    CKThreadLocalComponentScope threadScope(root1, {});
+    {
+      CKComponentScope scope([CKCompositeComponent class], @"macaque");
+      int32_t globalIdentifier = CKThreadLocalComponentScope::currentScope()->stack.top().node.scopeHandle.globalIdentifier;
+      XCTAssertEqual(globalIdentifier, scope.identifier());
+    }
+  }
+}
+
 #pragma mark - Component Scope Handle Global Identifier
 
 - (void)testComponentScopeHandleGlobalIdentifierIsAcquiredFromPreviousComponentScopeOneLevelDown
 {
-  CKComponentScopeRoot *root1 = [CKComponentScopeRoot rootWithListener:nil];
+  CKComponentScopeRoot *root1 = CKComponentScopeRootWithDefaultPredicates(nil, nil);
   CKComponentScopeRoot *root2;
   int32_t globalIdentifier;
   {
     CKThreadLocalComponentScope threadScope(root1, {});
     {
       CKComponentScope scope([CKCompositeComponent class], @"macaque");
-      globalIdentifier = CKThreadLocalComponentScope::currentScope()->stack.top().frame.handle.globalIdentifier;
+      globalIdentifier = CKThreadLocalComponentScope::currentScope()->stack.top().node.scopeHandle.globalIdentifier;
     }
     root2 = CKThreadLocalComponentScope::currentScope()->newScopeRoot;
   }
@@ -202,48 +288,48 @@
     CKThreadLocalComponentScope threadScope(root2, {});
     {
       CKComponentScope scope([CKCompositeComponent class], @"macaque");
-      XCTAssertEqual(globalIdentifier, CKThreadLocalComponentScope::currentScope()->stack.top().frame.handle.globalIdentifier);
+      XCTAssertEqual(globalIdentifier, CKThreadLocalComponentScope::currentScope()->stack.top().node.scopeHandle.globalIdentifier);
     }
   }
 }
 
 - (void)testComponentScopeHandleGlobalIdentifierIsNotTheSameBetweenSiblings
 {
-  CKComponentScopeRoot *root = [CKComponentScopeRoot rootWithListener:nil];
+  CKComponentScopeRoot *root = CKComponentScopeRootWithDefaultPredicates(nil, nil);
   {
     CKThreadLocalComponentScope threadScope(root, {});
     int32_t globalIdentifier;
     {
       CKComponentScope scope([CKCompositeComponent class], @"moose");
-      globalIdentifier = CKThreadLocalComponentScope::currentScope()->stack.top().frame.handle.globalIdentifier;
+      globalIdentifier = CKThreadLocalComponentScope::currentScope()->stack.top().node.scopeHandle.globalIdentifier;
     }
     {
       CKComponentScope scope([CKCompositeComponent class], @"macaque");
-      XCTAssertNotEqual(globalIdentifier, CKThreadLocalComponentScope::currentScope()->stack.top().frame.handle.globalIdentifier);
+      XCTAssertNotEqual(globalIdentifier, CKThreadLocalComponentScope::currentScope()->stack.top().node.scopeHandle.globalIdentifier);
     }
   }
 }
 
-- (void)testComponentScopeHandleGlobalIdentifierIsTheSameBetweenSiblingsWithComponentScopeCollision
+- (void)testComponentScopeHandleGlobalIdentifierIsNotTheSameBetweenSiblingsWithComponentScopeCollision
 {
-  CKComponentScopeRoot *root = [CKComponentScopeRoot rootWithListener:nil];
+  CKComponentScopeRoot *root = CKComponentScopeRootWithDefaultPredicates(nil, nil);
   {
     CKThreadLocalComponentScope threadScope(root, {});
     int32_t globalIdentifier;
     {
       CKComponentScope scope([CKCompositeComponent class], @"macaque");
-      globalIdentifier = CKThreadLocalComponentScope::currentScope()->stack.top().frame.handle.globalIdentifier;
+      globalIdentifier = CKThreadLocalComponentScope::currentScope()->stack.top().node.scopeHandle.globalIdentifier;
     }
     {
       CKComponentScope scope([CKCompositeComponent class], @"macaque");
-      XCTAssertEqual(globalIdentifier, CKThreadLocalComponentScope::currentScope()->stack.top().frame.handle.globalIdentifier);
+      XCTAssertNotEqual(globalIdentifier, CKThreadLocalComponentScope::currentScope()->stack.top().node.scopeHandle.globalIdentifier);
     }
   }
 }
 
-- (void)testComponentScopeHandleGlobalIdentifierIsTheSameBetweenDescendantsWithComponentScopeCollision
+- (void)testComponentScopeHandleGlobalIdentifierIsNotTheSameBetweenDescendantsWithComponentScopeCollision
 {
-  CKComponentScopeRoot *root = [CKComponentScopeRoot rootWithListener:nil];
+  CKComponentScopeRoot *root = CKComponentScopeRootWithDefaultPredicates(nil, nil);
   {
     CKThreadLocalComponentScope threadScope(root, {});
     int32_t globalIdentifier;
@@ -251,14 +337,14 @@
       CKComponentScope scope1([CKCompositeComponent class], @"macaque");
       {
         CKComponentScope scope2([CKCompositeComponent class], @"moose");
-        globalIdentifier = CKThreadLocalComponentScope::currentScope()->stack.top().frame.handle.globalIdentifier;
+        globalIdentifier = CKThreadLocalComponentScope::currentScope()->stack.top().node.scopeHandle.globalIdentifier;
       }
     }
     {
       CKComponentScope scope1([CKCompositeComponent class], @"macaque");
       {
         CKComponentScope scope2([CKCompositeComponent class], @"moose");
-        XCTAssertEqual(globalIdentifier, CKThreadLocalComponentScope::currentScope()->stack.top().frame.handle.globalIdentifier);
+        XCTAssertNotEqual(globalIdentifier, CKThreadLocalComponentScope::currentScope()->stack.top().node.scopeHandle.globalIdentifier);
       }
     }
   }
@@ -266,7 +352,7 @@
 
 - (void)testComponentScopeHandleGlobalIdentifierIsTheSameBetweenDescendantsWithComponentScopeCollisionAcrossComponentScopeRoots
 {
-  CKComponentScopeRoot *root1 = [CKComponentScopeRoot rootWithListener:nil];
+  CKComponentScopeRoot *root1 = CKComponentScopeRootWithDefaultPredicates(nil, nil);
   CKComponentScopeRoot *root2;
   int32_t globalIdentifier;
   {
@@ -281,7 +367,7 @@
       CKComponentScope scope1([CKCompositeComponent class], @"macaque");
       {
         CKComponentScope scope2([CKCompositeComponent class], @"moose");
-        globalIdentifier = CKThreadLocalComponentScope::currentScope()->stack.top().frame.handle.globalIdentifier;
+        globalIdentifier = CKThreadLocalComponentScope::currentScope()->stack.top().node.scopeHandle.globalIdentifier;
       }
     }
     root2 = threadScope.newScopeRoot;
@@ -298,10 +384,456 @@
       CKComponentScope scope1([CKCompositeComponent class], @"macaque");
       {
         CKComponentScope scope2([CKCompositeComponent class], @"moose");
-        XCTAssertEqual(globalIdentifier, CKThreadLocalComponentScope::currentScope()->stack.top().frame.handle.globalIdentifier);
+        XCTAssertEqual(globalIdentifier, CKThreadLocalComponentScope::currentScope()->stack.top().node.scopeHandle.globalIdentifier);
       }
     }
   }
+}
+
+static BOOL testComponentProtocolPredicate(id<CKComponentProtocol> component)
+{
+  return [component conformsToProtocol:@protocol(TestScopedProtocol)];
+}
+
+- (void)testComponentScopeRootRegisteringProtocolComponentFindsThatComponentWhenEnumerating
+{
+  CKComponentScopeRoot *root = [CKComponentScopeRoot
+                                rootWithListener:nil
+                                analyticsListener:nil
+                                componentPredicates:{&testComponentProtocolPredicate}
+                                componentControllerPredicates:{}];
+  CKThreadLocalComponentScope threadScope(root, {});
+
+  TestComponentWithScopedProtocol *c = [TestComponentWithScopedProtocol new];
+  [root registerComponent:c];
+
+  __block BOOL foundComponent = NO;
+  [root
+   enumerateComponentsMatchingPredicate:&testComponentProtocolPredicate
+   block:^(id<CKComponentProtocol> component) {
+     if (c == component) {
+       foundComponent = YES;
+     }
+   }];
+
+  XCTAssert(foundComponent, @"Should have enumerated and found the input component");
+}
+
+- (void)testComponentScopeRootFactoryRegisteringProtocolComponentFindsThatComponentWhenEnumerating
+{
+  CKComponentScopeRoot *root = CKComponentScopeRootWithPredicates(nil, nil, {&testComponentProtocolPredicate}, {});
+
+  CKThreadLocalComponentScope threadScope(root, {});
+
+  TestComponentWithScopedProtocol *c = [TestComponentWithScopedProtocol new];
+  [root registerComponent:c];
+
+  __block BOOL foundComponent = NO;
+  [root
+   enumerateComponentsMatchingPredicate:&testComponentProtocolPredicate
+   block:^(id<CKComponentProtocol> component) {
+     if (c == component) {
+       foundComponent = YES;
+     }
+   }];
+
+  XCTAssert(foundComponent, @"Should have enumerated and found the input component");
+}
+
+- (void)testComponentScopeRootRegisteringDuplicateProtocolComponent
+{
+  CKComponentScopeRoot *root = [CKComponentScopeRoot
+                                rootWithListener:nil
+                                analyticsListener:nil
+                                componentPredicates:{&testComponentProtocolPredicate}
+                                componentControllerPredicates:{}];
+  CKThreadLocalComponentScope threadScope(root, {});
+
+  TestComponentWithScopedProtocol *c = [TestComponentWithScopedProtocol new];
+  [root registerComponent:c];
+  [root registerComponent:c];
+
+  __block NSInteger numberOfComponents = 0;
+  [root
+   enumerateComponentsMatchingPredicate:&testComponentProtocolPredicate
+   block:^(id<CKComponentProtocol> component) {
+     ++numberOfComponents;
+   }];
+
+  XCTAssert(numberOfComponents == 1, @"Should have deduplicate the component");
+}
+
+- (void)testComponentScopeRootFactoryRegisteringDuplicateProtocolComponent
+{
+  CKComponentScopeRoot *root = CKComponentScopeRootWithPredicates(nil, nil, {&testComponentProtocolPredicate}, {});
+  CKThreadLocalComponentScope threadScope(root, {});
+
+  TestComponentWithScopedProtocol *c = [TestComponentWithScopedProtocol new];
+  [root registerComponent:c];
+  [root registerComponent:c];
+
+  __block NSInteger numberOfComponents = 0;
+  [root
+   enumerateComponentsMatchingPredicate:&testComponentProtocolPredicate
+   block:^(id<CKComponentProtocol> component) {
+     ++numberOfComponents;
+   }];
+
+  XCTAssert(numberOfComponents == 1, @"Should have deduplicate the component");
+}
+
+- (void)testComponentScopeRootRegisteringMultipleProtocolComponentFindsBothComponentsWhenEnumerating
+{
+  CKComponentScopeRoot *root = [CKComponentScopeRoot
+                                rootWithListener:nil
+                                analyticsListener:nil
+                                componentPredicates:{&testComponentProtocolPredicate}
+                                componentControllerPredicates:{}];
+  CKThreadLocalComponentScope threadScope(root, {});
+
+  TestComponentWithScopedProtocol *c1 = [TestComponentWithScopedProtocol new];
+  [root registerComponent:c1];
+  TestComponentWithScopedProtocol *c2 = [TestComponentWithScopedProtocol new];
+  [root registerComponent:c2];
+
+  __block BOOL foundC1 = NO;
+  __block BOOL foundC2 = NO;
+  [root
+   enumerateComponentsMatchingPredicate:&testComponentProtocolPredicate
+   block:^(id<CKComponentProtocol> component) {
+     if (c1 == component) {
+       foundC1 = YES;
+     }
+     if (c2 == component) {
+       foundC2 = YES;
+     }
+   }];
+
+  XCTAssert(foundC1 && foundC2, @"Should have enumerated and found the input components");
+}
+
+- (void)testComponentScopeRootFactoryRegisteringMultipleProtocolComponentFindsBothComponentsWhenEnumerating
+{
+  CKComponentScopeRoot *root = CKComponentScopeRootWithPredicates(nil, nil, {&testComponentProtocolPredicate}, {});
+  CKThreadLocalComponentScope threadScope(root, {});
+
+  TestComponentWithScopedProtocol *c1 = [TestComponentWithScopedProtocol new];
+  [root registerComponent:c1];
+  TestComponentWithScopedProtocol *c2 = [TestComponentWithScopedProtocol new];
+  [root registerComponent:c2];
+
+  __block BOOL foundC1 = NO;
+  __block BOOL foundC2 = NO;
+  [root
+   enumerateComponentsMatchingPredicate:&testComponentProtocolPredicate
+   block:^(id<CKComponentProtocol> component) {
+     if (c1 == component) {
+       foundC1 = YES;
+     }
+     if (c2 == component) {
+       foundC2 = YES;
+     }
+   }];
+
+  XCTAssert(foundC1 && foundC2, @"Should have enumerated and found the input components");
+}
+
+- (void)testComponentScopeRootRegisteringNonProtocolComponentFindsNoComponentsWhenEnumerating
+{
+  CKComponentScopeRoot *root = [CKComponentScopeRoot
+                                rootWithListener:nil
+                                analyticsListener:nil
+                                componentPredicates:{&testComponentProtocolPredicate}
+                                componentControllerPredicates:{}];
+  CKThreadLocalComponentScope threadScope(root, {});
+
+  TestComponentWithoutScopedProtocol *c = [TestComponentWithoutScopedProtocol new];
+  [root registerComponent:c];
+
+  [root
+   enumerateComponentsMatchingPredicate:&testComponentProtocolPredicate
+   block:^(id<CKComponentProtocol> component) {
+     XCTFail(@"Should not have found any components");
+   }];
+}
+
+- (void)testComponentScopeRootFactoryRegisteringNonProtocolComponentFindsNoComponentsWhenEnumerating
+{
+  CKComponentScopeRoot *root = CKComponentScopeRootWithPredicates(nil, nil, {&testComponentProtocolPredicate}, {});
+  CKThreadLocalComponentScope threadScope(root, {});
+
+  TestComponentWithoutScopedProtocol *c = [TestComponentWithoutScopedProtocol new];
+  [root registerComponent:c];
+
+  [root
+   enumerateComponentsMatchingPredicate:&testComponentProtocolPredicate
+   block:^(id<CKComponentProtocol> component) {
+     XCTFail(@"Should not have found any components");
+   }];
+}
+
+static BOOL testComponentControllerProtocolPredicate(id<CKComponentControllerProtocol> component)
+{
+  return [component conformsToProtocol:@protocol(TestScopedProtocol)];
+}
+
+- (void)testComponentScopeRootRegisteringProtocolComponentControllerFindsThatControllerWhenEnumerating
+{
+  CKComponentScopeRoot *root = [CKComponentScopeRoot
+                                rootWithListener:nil
+                                analyticsListener:nil
+                                componentPredicates:{}
+                                componentControllerPredicates:{&testComponentControllerProtocolPredicate}];
+  CKThreadLocalComponentScope threadScope(root, {});
+
+  TestComponentControllerWithScopedProtocol *c = [TestComponentControllerWithScopedProtocol new];
+  [root registerComponentController:c];
+
+  __block BOOL foundController = NO;
+  [root
+   enumerateComponentControllersMatchingPredicate:&testComponentControllerProtocolPredicate
+   block:^(id<CKComponentControllerProtocol> componentController) {
+     if (c == componentController) {
+       foundController = YES;
+     }
+   }];
+
+  XCTAssert(foundController, @"Should have enumerated and found the input controller");
+}
+
+- (void)testComponentScopeRootFactoryRegisteringProtocolComponentControllerFindsThatControllerWhenEnumerating
+{
+  CKComponentScopeRoot *root = CKComponentScopeRootWithPredicates(nil, nil, {}, {&testComponentControllerProtocolPredicate});
+  CKThreadLocalComponentScope threadScope(root, {});
+
+  TestComponentControllerWithScopedProtocol *c = [TestComponentControllerWithScopedProtocol new];
+  [root registerComponentController:c];
+
+  __block BOOL foundController = NO;
+  [root
+   enumerateComponentControllersMatchingPredicate:&testComponentControllerProtocolPredicate
+   block:^(id<CKComponentControllerProtocol> componentController) {
+     if (c == componentController) {
+       foundController = YES;
+     }
+   }];
+
+  XCTAssert(foundController, @"Should have enumerated and found the input controller");
+}
+
+- (void)testComponentScopeRootRegisteringDuplicateProtocolComponentController
+{
+  CKComponentScopeRoot *root = [CKComponentScopeRoot
+                                rootWithListener:nil
+                                analyticsListener:nil
+                                componentPredicates:{}
+                                componentControllerPredicates:{&testComponentControllerProtocolPredicate}];
+  CKThreadLocalComponentScope threadScope(root, {});
+
+  TestComponentControllerWithScopedProtocol *c = [TestComponentControllerWithScopedProtocol new];
+  [root registerComponentController:c];
+  [root registerComponentController:c];
+
+  __block NSInteger numberOfComponentControllers = 0;
+  [root
+   enumerateComponentControllersMatchingPredicate:&testComponentControllerProtocolPredicate
+   block:^(id<CKComponentControllerProtocol> componentController) {
+     ++numberOfComponentControllers;
+   }];
+
+  XCTAssert(numberOfComponentControllers == 1, @"Should have deduplicate the component controller");
+}
+
+- (void)testComponentScopeRootFactoryRegisteringDuplicateProtocolComponentController
+{
+  CKComponentScopeRoot *root = CKComponentScopeRootWithPredicates(nil, nil, {}, {&testComponentControllerProtocolPredicate});
+  CKThreadLocalComponentScope threadScope(root, {});
+
+  TestComponentControllerWithScopedProtocol *c = [TestComponentControllerWithScopedProtocol new];
+  [root registerComponentController:c];
+  [root registerComponentController:c];
+
+  __block NSInteger numberOfComponentControllers = 0;
+  [root
+   enumerateComponentControllersMatchingPredicate:&testComponentControllerProtocolPredicate
+   block:^(id<CKComponentControllerProtocol> componentController) {
+     ++numberOfComponentControllers;
+   }];
+
+  XCTAssert(numberOfComponentControllers == 1, @"Should have deduplicate the component controller");
+}
+
+- (void)testComponentScopeRootRegisteringMultipleProtocolComponentControllersFindsBothControllersWhenEnumerating
+{
+  CKComponentScopeRoot *root = [CKComponentScopeRoot
+                                rootWithListener:nil
+                                analyticsListener:nil
+                                componentPredicates:{}
+                                componentControllerPredicates:{&testComponentControllerProtocolPredicate}];
+  CKThreadLocalComponentScope threadScope(root, {});
+
+  TestComponentControllerWithScopedProtocol *c1 = [TestComponentControllerWithScopedProtocol new];
+  [root registerComponentController:c1];
+  TestComponentControllerWithScopedProtocol *c2 = [TestComponentControllerWithScopedProtocol new];
+  [root registerComponentController:c2];
+
+  __block BOOL foundC1 = NO;
+  __block BOOL foundC2 = NO;
+  [root
+   enumerateComponentControllersMatchingPredicate:&testComponentControllerProtocolPredicate
+   block:^(id<CKComponentControllerProtocol> componentController) {
+     if (c1 == componentController) {
+       foundC1 = YES;
+     }
+     if (c2 == componentController) {
+       foundC2 = YES;
+     }
+   }];
+
+  XCTAssert(foundC1 && foundC2, @"Should have enumerated and found the input controllers");
+}
+
+- (void)testComponentScopeRootFactoryRegisteringMultipleProtocolComponentControllersFindsBothControllersWhenEnumerating
+{
+  CKComponentScopeRoot *root = CKComponentScopeRootWithPredicates(nil, nil, {}, {&testComponentControllerProtocolPredicate});
+  CKThreadLocalComponentScope threadScope(root, {});
+
+  TestComponentControllerWithScopedProtocol *c1 = [TestComponentControllerWithScopedProtocol new];
+  [root registerComponentController:c1];
+  TestComponentControllerWithScopedProtocol *c2 = [TestComponentControllerWithScopedProtocol new];
+  [root registerComponentController:c2];
+
+  __block BOOL foundC1 = NO;
+  __block BOOL foundC2 = NO;
+  [root
+   enumerateComponentControllersMatchingPredicate:&testComponentControllerProtocolPredicate
+   block:^(id<CKComponentControllerProtocol> componentController) {
+     if (c1 == componentController) {
+       foundC1 = YES;
+     }
+     if (c2 == componentController) {
+       foundC2 = YES;
+     }
+   }];
+
+  XCTAssert(foundC1 && foundC2, @"Should have enumerated and found the input controllers");
+}
+
+@end
+
+@interface CKComponentScopeRootTests_RegistrationAndEnumeration: XCTestCase
+@end
+
+@implementation CKComponentScopeRootTests_RegistrationAndEnumeration
+
+- (void)testComponentScopeRootRegisteringProtocolComponentFindsThatComponentWhenEnumerating
+{
+  const auto root = makeScopeRootWithComponentPredicate(&testComponentProtocolPredicate);
+  const auto threadScope = CKThreadLocalComponentScope {root, {}};
+  const auto c = [TestComponentWithScopedProtocol new];
+
+  [root registerComponent:c];
+
+  XCTAssert(CK::Collection::contains([root componentsMatchingPredicate:&testComponentProtocolPredicate], c),
+            @"Should have enumerated and found the input component");
+}
+
+- (void)testComponentScopeRootFactoryRegisteringProtocolComponentFindsThatComponentWhenEnumerating
+{
+  const auto root = CKComponentScopeRootWithPredicates(nil, nil, {&testComponentProtocolPredicate}, {});
+  const auto threadScope = CKThreadLocalComponentScope {root, {}};
+  const auto c = [TestComponentWithScopedProtocol new];
+
+  [root registerComponent:c];
+
+  XCTAssert(CK::Collection::contains([root componentsMatchingPredicate:&testComponentProtocolPredicate], c),
+            @"Should have enumerated and found the input component");
+}
+
+- (void)testComponentScopeRootRegisteringDuplicateProtocolComponent
+{
+  const auto root = makeScopeRootWithComponentPredicate(&testComponentProtocolPredicate);
+  const auto threadScope = CKThreadLocalComponentScope {root, {}};
+  const auto c = [TestComponentWithScopedProtocol new];
+
+  [root registerComponent:c];
+  [root registerComponent:c];
+
+  XCTAssertEqual([root componentsMatchingPredicate:&testComponentProtocolPredicate].size(), 1, @"Should have deduplicate the component");
+}
+
+- (void)testComponentScopeRootFactoryRegisteringDuplicateProtocolComponent
+{
+  const auto root = CKComponentScopeRootWithPredicates(nil, nil, {&testComponentProtocolPredicate}, {});
+  const auto threadScope = CKThreadLocalComponentScope {root, {}};
+  const auto c = [TestComponentWithScopedProtocol new];
+
+  [root registerComponent:c];
+  [root registerComponent:c];
+
+  XCTAssert(CK::Collection::contains([root componentsMatchingPredicate:&testComponentProtocolPredicate], c),
+            @"Should have enumerated and found the input component");
+}
+
+- (void)testComponentScopeRootRegisteringMultipleProtocolComponentFindsBothComponentsWhenEnumerating
+{
+  const auto root = makeScopeRootWithComponentPredicate(&testComponentProtocolPredicate);
+  const auto threadScope = CKThreadLocalComponentScope {root, {}};
+  const auto c1 = [TestComponentWithScopedProtocol new];
+  const auto c2 = [TestComponentWithScopedProtocol new];
+
+  [root registerComponent:c1];
+  [root registerComponent:c2];
+
+  const auto foundC1 = CK::Collection::contains([root componentsMatchingPredicate:&testComponentProtocolPredicate], c1);
+  const auto foundC2 = CK::Collection::contains([root componentsMatchingPredicate:&testComponentProtocolPredicate], c2);
+  XCTAssert(foundC1 && foundC2, @"Should have enumerated and found the input components");
+}
+
+- (void)testComponentScopeRootFactoryRegisteringMultipleProtocolComponentFindsBothComponentsWhenEnumerating
+{
+  const auto root = CKComponentScopeRootWithPredicates(nil, nil, {&testComponentProtocolPredicate}, {});
+  const auto threadScope = CKThreadLocalComponentScope {root, {}};
+  const auto c1 = [TestComponentWithScopedProtocol new];
+  const auto c2 = [TestComponentWithScopedProtocol new];
+
+  [root registerComponent:c1];
+  [root registerComponent:c2];
+
+  const auto foundC1 = CK::Collection::contains([root componentsMatchingPredicate:&testComponentProtocolPredicate], c1);
+  const auto foundC2 = CK::Collection::contains([root componentsMatchingPredicate:&testComponentProtocolPredicate], c2);
+  XCTAssert(foundC1 && foundC2, @"Should have enumerated and found the input components");
+}
+
+- (void)testComponentScopeRootRegisteringNonProtocolComponentFindsNoComponentsWhenEnumerating
+{
+  const auto root = makeScopeRootWithComponentPredicate(&testComponentProtocolPredicate);
+  const auto threadScope = CKThreadLocalComponentScope {root, {}};
+  const auto c = [TestComponentWithoutScopedProtocol new];
+
+  [root registerComponent:c];
+
+  XCTAssert([root componentsMatchingPredicate:&testComponentProtocolPredicate].empty(), @"Should not have found any components");
+}
+
+- (void)testComponentScopeRootFactoryRegisteringNonProtocolComponentFindsNoComponentsWhenEnumerating
+{
+  const auto root = CKComponentScopeRootWithPredicates(nil, nil, {&testComponentProtocolPredicate}, {});
+  const auto threadScope = CKThreadLocalComponentScope {root, {}};
+  const auto c = [TestComponentWithoutScopedProtocol new];
+
+  [root registerComponent:c];
+
+  XCTAssert([root componentsMatchingPredicate:&testComponentProtocolPredicate].empty(), @"Should not have found any components");
+}
+
+static auto makeScopeRootWithComponentPredicate(const CKComponentPredicate p) -> CKComponentScopeRoot *
+{
+  return [CKComponentScopeRoot
+          rootWithListener:nil
+          analyticsListener:nil
+          componentPredicates:{p}
+          componentControllerPredicates:{}];
 }
 
 @end

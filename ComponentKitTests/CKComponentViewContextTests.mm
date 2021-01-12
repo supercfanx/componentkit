@@ -10,7 +10,7 @@
 
 #import <XCTest/XCTest.h>
 
-#import <ComponentKitTestHelpers/CKComponentLifecycleTestController.h>
+#import <ComponentKitTestHelpers/CKComponentLifecycleTestHelper.h>
 
 #import <ComponentKit/CKComponent.h>
 #import <ComponentKit/CKComponentAnimation.h>
@@ -21,29 +21,38 @@
 @interface CKComponentViewContextTests : XCTestCase
 @end
 
-@interface CKSingleViewComponentProvider : NSObject <CKComponentProvider>
-@end
-
 @interface CKNestedComponent : CKCompositeComponent
 @property (nonatomic, strong) CKComponent *subcomponent;
 
-@end
-@interface CKNestedComponentProvider : NSObject <CKComponentProvider>
++ (instancetype)new;
+
 @end
 
 @implementation CKComponentViewContextTests
+
+static CKComponent *singleViewComponentProvider(id<NSObject> model, id<NSObject>context)
+{
+  return CK::ComponentBuilder()
+             .viewClass([UIImageView class])
+             .build();
+}
+
+static CKComponent *nestedComponentProvider(id<NSObject> model, id<NSObject>context)
+{
+  return [CKNestedComponent new];
+}
 
 static const CKSizeRange size = {{100, 100}, {100, 100}};
 
 - (void)testMountingComponentWithViewExposesViewContextWithTheCreatedView
 {
-  CKComponentLifecycleTestController *componentLifecycleTestController = [[CKComponentLifecycleTestController alloc] initWithComponentProvider:[CKSingleViewComponentProvider class]
+  CKComponentLifecycleTestHelper *componentLifecycleTestController = [[CKComponentLifecycleTestHelper alloc] initWithComponentProvider:singleViewComponentProvider
                                                                                                                              sizeRangeProvider:nil];
-  const CKComponentLifecycleTestControllerState state = [componentLifecycleTestController prepareForUpdateWithModel:nil
+  const CKComponentLifecycleTestHelperState state = [componentLifecycleTestController prepareForUpdateWithModel:nil
                                                                                                     constrainedSize:size
                                                                                                             context:nil];
   [componentLifecycleTestController updateWithState:state];
-  CKComponent *component = state.componentLayout.component;
+  CKComponent *component = (CKComponent *)state.componentLayout.component;
 
   UIView *rootView = [[UIView alloc] initWithFrame:{{0,0}, size.max}];
   [componentLifecycleTestController attachToView:rootView];
@@ -58,9 +67,9 @@ static const CKSizeRange size = {{100, 100}, {100, 100}};
 
 - (void)testMountingComponentWithViewAndNestedComponentWithoutViewExposesViewContextWithSubcomponentFrameInOuterView
 {
-  CKComponentLifecycleTestController *componentLifecycleTestController = [[CKComponentLifecycleTestController alloc] initWithComponentProvider:[CKNestedComponentProvider class]
+  CKComponentLifecycleTestHelper *componentLifecycleTestController = [[CKComponentLifecycleTestHelper alloc] initWithComponentProvider:nestedComponentProvider
                                                                                                                              sizeRangeProvider:nil];
-  const CKComponentLifecycleTestControllerState state = [componentLifecycleTestController prepareForUpdateWithModel:nil
+  const CKComponentLifecycleTestHelperState state = [componentLifecycleTestController prepareForUpdateWithModel:nil
                                                                                                     constrainedSize:size
                                                                                                             context:nil];
   [componentLifecycleTestController updateWithState:state];
@@ -77,29 +86,14 @@ static const CKSizeRange size = {{100, 100}, {100, 100}};
 
 @end
 
-@implementation CKSingleViewComponentProvider
-
-+ (CKComponent *)componentForModel:(id<NSObject>)model context:(id<NSObject>)context
-{
-  return [CKComponent newWithView:{[UIImageView class]} size:{}];
-}
-
-@end
-
-@implementation CKNestedComponentProvider
-
-+ (CKComponent *)componentForModel:(id<NSObject>)model context:(id<NSObject>)context
-{
-  return [CKNestedComponent new];
-}
-
-@end
-
 @implementation CKNestedComponent
 
 + (instancetype)new
 {
-  CKComponent *subcomponent = [CKComponent newWithView:{} size:{50, 50}];
+  CKComponent *subcomponent = CK::ComponentBuilder()
+                                  .width(50)
+                                  .height(50)
+                                  .build();
   CKNestedComponent *c =
   [super newWithComponent:
    [CKStaticLayoutComponent

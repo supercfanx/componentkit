@@ -8,11 +8,15 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
 #import <vector>
 
 #import <UIKit/UIKit.h>
 
-#import <ComponentKit/CKTextKitRenderer.h>
+#import <ComponentTextKit/CKTextKitRenderer.h>
 
 @protocol CKTextKitTruncating <NSObject>
 
@@ -35,3 +39,5 @@
                 constrainedSize:(CGSize)constrainedSize;
 
 @end
+
+#endif

@@ -10,20 +10,38 @@
 
 #import "CKComponent+UIView.h"
 
-#import <objc/runtime.h>
+#import <ComponentKit/CKMountedObjectForView.h>
+#import <ComponentKit/CKComponent.h>
+#import <RenderCore/RCAssociatedObject.h>
 
-static char const kViewComponentKey = ' ';
+#if CK_ASSERTIONS_ENABLED
+static const void *kMountedComponentClassNameKey = nullptr;
+#endif
 
-@implementation UIView (CKComponent)
-
-- (CKComponent *)ck_component
+/** Strong reference back to the associated component while the component is mounted. */
+NSString *CKLastMountedComponentClassNameForView(UIView *view)
 {
-  return objc_getAssociatedObject(self, &kViewComponentKey);
+#if CK_ASSERTIONS_ENABLED
+  return RCGetAssociatedObject_MainThreadAffined(view, &kMountedComponentClassNameKey);
+#else
+  return nil;
+#endif
 }
 
-- (void)ck_setComponent:(CKComponent *)component
+/** Strong reference back to the associated component while the component is mounted. */
+CKComponent *CKMountedComponentForView(UIView *view)
 {
-  objc_setAssociatedObject(self, &kViewComponentKey, component, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  return (CKComponent *)CKMountedObjectForView(view);
 }
 
-@end
+/** This is for internal use by the framework only. */
+void CKSetMountedComponentForView(UIView *view, CKComponent *component)
+{
+  CKSetMountedObjectForView(view, component);
+#if CK_ASSERTIONS_ENABLED
+  if (component != nil) {
+    // We want to know which component was last mounted - do not clean this up.
+    RCSetAssociatedObject_MainThreadAffined(view, &kMountedComponentClassNameKey, component.className);
+  }
+#endif
+}

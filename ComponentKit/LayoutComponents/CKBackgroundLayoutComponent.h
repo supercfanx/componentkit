@@ -8,19 +8,32 @@
  *
  */
 
-#import <ComponentKit/CKComponent.h>
+#import <ComponentKit/CKLayoutComponent.h>
+#import <ComponentKit/CKDefines.h>
+
+NS_ASSUME_NONNULL_BEGIN
 
 /**
+ @uidocs https://fburl.com/CKBackgroundLayoutComponent:bf91
+
  Lays out a single child component, then lays out a background component behind it stretched to its size.
  */
-@interface CKBackgroundLayoutComponent : CKComponent
+NS_SWIFT_NAME(BackgroundLayoutComponent)
+@interface CKBackgroundLayoutComponent : CKLayoutComponent
+
+CK_INIT_UNAVAILABLE;
+
+CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
 
 /**
- @param component A child that is laid out to determine the size of this component. If this is nil, then this method
-        returns nil.
+ @param component A child that is laid out to determine the size of this component.
  @param background A child that is laid out behind it. May be nil, in which case the background is omitted.
  */
-+ (instancetype)newWithComponent:(CKComponent *)component
-                      background:(CKComponent *)background;
+- (instancetype)initWithComponent:(CKComponent *_Nullable)component
+                       background:(CKComponent *_Nullable)background NS_DESIGNATED_INITIALIZER;
 
 @end
+
+NS_ASSUME_NONNULL_END
+
+#import <ComponentKit/BackgroundLayoutComponentBuilder.h>

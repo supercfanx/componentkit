@@ -11,16 +11,15 @@
 #import <XCTest/XCTest.h>
 
 #import <ComponentKit/CKComponent.h>
+#import <ComponentKit/CKComponentSubclass.h>
 
 #import <ComponentKit/CKComponentAccessibility.h>
-#import <ComponentKit/CKComponentAccessibility_Private.h>
+
+#import "CKComponentTestCase.h"
 
 using namespace CK::Component::Accessibility;
 
-@interface CKComponentAccessibilityTests : XCTestCase
-@end
-
-@interface UIAccessibleView : UIView
+@interface CKComponentAccessibilityTests : CKComponentTestCase
 @end
 
 @interface UIView (CKComponentAccessibilityTests)
@@ -28,29 +27,6 @@ using namespace CK::Component::Accessibility;
 @end
 
 @implementation CKComponentAccessibilityTests
-
-- (void)testAccessibilityContextItemsAreProperlyTransformedToViewAttributes
-{
-  CKComponentViewConfiguration viewConfiguration = {
-    [UIView class],
-    {{@selector(setBlah:), @"Blah"}, {@selector(setAccessibilityIdentifier:), @"batman"}},
-    {
-      .isAccessibilityElement = @NO, .accessibilityLabel = ^{ return @"accessibleBatman"; }
-    }};
-  CKComponentViewConfiguration expectedViewConfiguration = {
-    [UIView class],
-    {{@selector(setBlah:), @"Blah"}, {@selector(setAccessibilityIdentifier:), @"batman"}, {@selector(setAccessibilityLabel:), @"accessibleBatman"}, {@selector(setIsAccessibilityElement:), @NO}},
-    {
-      .isAccessibilityElement = @NO, .accessibilityLabel = @"accessibleBatman"
-    }};
-  XCTAssertTrue(AccessibleViewConfiguration(viewConfiguration) == expectedViewConfiguration, @"Accessibility attributes were applied incorrectly");
-}
-
-- (void)testEmptyAccessibilityContextLeavesTheViewConfigurationUnchanged
-{
-  CKComponentViewConfiguration viewConfiguration = {[UIView class], {{@selector(setBlah:), @"Blah"}}};
-  XCTAssertTrue(AccessibleViewConfiguration(viewConfiguration) == viewConfiguration, @"Accessibility attributes were applied incorrectly");
-}
 
 - (void)testSetForceAccessibilityEnabledEnablesAccessibility
 {
@@ -64,7 +40,56 @@ using namespace CK::Component::Accessibility;
   XCTAssertFalse(IsAccessibilityEnabled());
 }
 
-@end
+- (void)testAccessibilityContextItemsAreTransformedToViewPropertiesWhenEnabled
+{
+  SetForceAccessibilityEnabled(YES);
+  CKComponent *testComponent = CK::ComponentBuilder()
+                                   .viewClass([UIView class])
+                                   .accessibilityContext({
+    .isAccessibilityElement = @YES,
+    .accessibilityLabel = ^{ return @"accessibleSuperman";},
+    .accessibilityHint = ^{ return @"accessibleClark";},
+    .accessibilityValue = ^{ return @"accessibleKent";},
+    .accessibilityTraits = @(UIAccessibilityTraitButton | UIAccessibilityTraitImage),
+  })
+                                   .build();
 
-@implementation UIAccessibleView
+  UIView *container = [UIView new];
+  NSSet *mountedComponents = CKMountComponentLayout([testComponent layoutThatFits:{} parentSize:{}], container, nil, nil);
+
+  XCTAssertEqual(testComponent.viewContext.view.isAccessibilityElement, YES);
+  XCTAssertEqual(testComponent.viewContext.view.accessibilityLabel, @"accessibleSuperman",);
+  XCTAssertEqual(testComponent.viewContext.view.accessibilityHint, @"accessibleClark");
+  XCTAssertEqual(testComponent.viewContext.view.accessibilityValue, @"accessibleKent");
+  XCTAssertEqual(testComponent.viewContext.view.accessibilityTraits, UIAccessibilityTraitButton | UIAccessibilityTraitImage);
+
+  CKUnmountComponents(mountedComponents);
+}
+
+- (void)testAccessibilityContextItemsAreNotTransformedToViewPropertiesWhenDisabled
+{
+  SetForceAccessibilityEnabled(NO);
+  CKComponent *testComponent = CK::ComponentBuilder()
+                                   .viewClass([UIView class])
+                                   .accessibilityContext({
+    .isAccessibilityElement = @YES,
+    .accessibilityLabel = ^{ return @"accessibleSuperman";},
+    .accessibilityHint = ^{ return @"accessibleClark";},
+    .accessibilityValue = ^{ return @"accessibleKent";},
+    .accessibilityTraits = @(UIAccessibilityTraitButton | UIAccessibilityTraitImage),
+  })
+                                   .build();
+
+  UIView *container = [UIView new];
+  NSSet *mountedComponents = CKMountComponentLayout([testComponent layoutThatFits:{} parentSize:{}], container, nil, nil);
+
+  XCTAssertEqual(testComponent.viewContext.view.isAccessibilityElement, NO);
+  XCTAssertNil(testComponent.viewContext.view.accessibilityLabel);
+  XCTAssertNil(testComponent.viewContext.view.accessibilityHint);
+  XCTAssertNil(testComponent.viewContext.view.accessibilityValue);
+  XCTAssertEqual(testComponent.viewContext.view.accessibilityTraits, UIAccessibilityTraitNone);
+
+  CKUnmountComponents(mountedComponents);
+}
+
 @end

@@ -14,7 +14,7 @@
 
 /**
  Protocol that classes provding the method that construct a component for a model need to implement.
- 
+
  The Components infrastructure is decoupled from specific model and component classes by requiring product code to construct the
  correct component.
  */
@@ -31,3 +31,6 @@
 + (CKComponent *)componentForModel:(id<NSObject>)model context:(id<NSObject>)context;
 
 @end
+
+typedef CKComponent *(*CKComponentProviderFunc)(id<NSObject>, id<NSObject>);
+typedef CKComponent *(^CKComponentProviderBlock)(id<NSObject>, id<NSObject>);

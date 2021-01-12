@@ -12,6 +12,8 @@
 
 #import <ComponentKit/CKAssert.h>
 #import <ComponentKit/CKMacros.h>
+#import <ComponentKit/CKComponentInternal.h>
+#import <ComponentKit/CKComponentPerfScope.h>
 
 #import "CKComponentSubclass.h"
 
@@ -21,29 +23,32 @@
   CKComponent *_component;
 }
 
-+ (instancetype)newWithComponent:(CKComponent *)component
-                         overlay:(CKComponent *)overlay
+- (instancetype)initWithComponent:(CKComponent *)component overlay:(CKComponent *)overlay
 {
-  if (component == nil) {
-    return nil;
+  CKComponentPerfScope perfScope(self.class);
+  if (self = [super initWithView:{} size:{}]) {
+    self->_overlay = overlay;
+    self->_component = component;
   }
-  CKOverlayLayoutComponent *c = [super newWithView:{} size:{}];
-  if (c) {
-    c->_overlay = overlay;
-    c->_component = component;
-  }
-  return c;
+  return self;
 }
 
-+ (instancetype)newWithView:(const CKComponentViewConfiguration &)view size:(const CKComponentSize &)size
+#pragma mark - CKMountable
+
+- (unsigned int)numberOfChildren
 {
-  CK_NOT_DESIGNATED_INITIALIZER();
+  return RCIterable::numberOfChildren(_component, _overlay);
+}
+
+- (id<CKMountable>)childAtIndex:(unsigned int)index
+{
+  return RCIterable::childAtIndex(self, index, _component, _overlay);
 }
 
 /**
  First layout the contents, then fit the overlay on top of it.
  */
-- (CKComponentLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
                           restrictedToSize:(const CKComponentSize &)size
                       relativeToParentSize:(CGSize)parentSize
 {
@@ -51,18 +56,21 @@
            @"CKOverlayLayoutComponent only passes size {} to the super class initializer, but received size %@ "
            "(component=%@, overlay=%@)", size.description(), _component, _overlay);
 
-  const CKComponentLayout contentsLayout = [_component layoutThatFits:constrainedSize parentSize:parentSize];
-  
+  // This variable needs to be mutable so we can move from it.
+  /* const */ RCLayout contentsLayout = [_component layoutThatFits:constrainedSize parentSize:parentSize];
+
+  const auto contentsLayoutSize = contentsLayout.size;
+
   return {
     self,
-    contentsLayout.size,
+    contentsLayoutSize,
     _overlay
-    ? std::vector<CKComponentLayoutChild> {
-      {{0,0}, contentsLayout},
-      {{0,0}, [_overlay layoutThatFits:{contentsLayout.size, contentsLayout.size} parentSize:contentsLayout.size]},
+    ? std::vector<RCLayoutChild> {
+      {{0,0}, std::move(contentsLayout)},
+      {{0,0}, [_overlay layoutThatFits:{contentsLayoutSize, contentsLayoutSize} parentSize:contentsLayoutSize]},
     }
-    : std::vector<CKComponentLayoutChild> {
-      {{0,0}, contentsLayout},
+    : std::vector<RCLayoutChild> {
+      {{0,0}, std::move(contentsLayout)},
     }
   };
 }

@@ -8,6 +8,10 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
 #import <ComponentKit/CKComponent.h>
 #import <ComponentKit/CKNetworkImageDownloading.h>
 
@@ -21,15 +25,18 @@ struct CKNetworkImageComponentOptions {
 /** Renders an image from a URL. */
 @interface CKNetworkImageComponent : CKComponent
 
+CK_COMPONENT_INIT_UNAVAILABLE;
+
 /**
  @param options See CKNetworkImageComponentOptions
  @param attributes Applied to the underlying UIImageView.
  */
 + (instancetype)newWithURL:(NSURL *)url
            imageDownloader:(id<CKNetworkImageDownloading>)imageDownloader
-                 scenePath:(id)scenePath
                       size:(const CKComponentSize &)size
                    options:(const CKNetworkImageComponentOptions &)options
                 attributes:(const CKViewComponentAttributeValueMap &)attributes;
 
 @end
+
+#endif

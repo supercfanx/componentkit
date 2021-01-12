@@ -10,24 +10,82 @@
 
 #import "CKComponentHostingViewTestModel.h"
 
-#import <ComponentKit/CKComponent.h>
+#import <ComponentKit/CKFlexboxComponent.h>
+#import <ComponentKitTestHelpers/CKEmbeddedTestComponent.h>
+#import <ComponentKitTestHelpers/CKLifecycleTestComponent.h>
 
 @implementation CKComponentHostingViewTestModel
 
 - (instancetype)initWithColor:(UIColor *)color
                          size:(const CKComponentSize &)size
 {
+  return [self initWithColor:color
+                        size:size
+                 wrapperType:CKComponentHostingViewWrapperTypeNone
+       willGenerateComponent:nil];
+}
+
+- (instancetype)initWithColor:(UIColor *)color
+                         size:(const CKComponentSize &)size
+                  wrapperType:(CKComponentHostingViewWrapperType)wrapperType
+        willGenerateComponent:(void (^)())willGenerateComponent
+{
   if (self = [super init]) {
     _color = color;
     _size = size;
+    _wrapperType = wrapperType;
+    _willGenerateComponent = willGenerateComponent;
   }
   return self;
 }
 
 @end
 
+static CKComponent *componentWithDeepViewHierarchy(NSInteger viewLevel)
+{
+  if (viewLevel == 0) {
+    return nil;
+  }
+  return
+  CK::FlexboxComponentBuilder()
+      .viewClass([UIImageView class])
+      .child(componentWithDeepViewHierarchy(viewLevel - 1))
+      .child(componentWithDeepViewHierarchy(viewLevel - 1))
+      .build();
+}
+
 CKComponent *CKComponentWithHostingViewTestModel(CKComponentHostingViewTestModel *model)
 {
-  return [CKComponent newWithView:{[UIView class], {{@selector(setBackgroundColor:), [model color]}}}
-                             size:[model size]];
+  if (model.willGenerateComponent) {
+    model.willGenerateComponent();
+  }
+  switch(model.wrapperType) {
+    case CKComponentHostingViewWrapperTypeTestComponent: {
+      return
+      [CKEmbeddedTestComponent
+       newWithView:{[UIView class], {{@selector(setBackgroundColor:), [model color]}}}
+       size:[model size]];
+    }
+    case CKComponentHostingViewWrapperTypeFlexbox: {
+      return
+      CK::FlexboxComponentBuilder()
+          .child([CKLifecycleTestComponent
+            newWithView:{[UIView class], {{@selector(setBackgroundColor:), [model color]}}}
+            size:[model size]])
+              .sizeConstraints(model.size)
+          .build();
+    }
+    case CKComponentHostingViewWrapperTypeRenderComponent: {
+      return [CKRenderLifecycleTestComponent new];
+    }
+    case CKComponentHostingViewWrapperTypeNone: {
+      return
+      [CKLifecycleTestComponent
+       newWithView:{[UIView class], {{@selector(setBackgroundColor:), [model color]}}}
+       size:[model size]];
+    }
+    case CKComponentHostingViewWrapperTypeDeepViewHierarchy: {
+      return componentWithDeepViewHierarchy(4);
+    }
+  }
 }

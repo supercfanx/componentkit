@@ -12,10 +12,10 @@
 
 #import <ComponentKit/CKAssert.h>
 
-#import <ComponentKit/CKTextKitContext.h>
-#import <ComponentKit/CKTextKitShadower.h>
-#import <ComponentKit/CKTextKitTailTruncater.h>
-#import <ComponentKit/CKTextKitTruncating.h>
+#import <ComponentTextKit/CKTextKitContext.h>
+#import <ComponentTextKit/CKTextKitShadower.h>
+#import <ComponentTextKit/CKTextKitTailTruncater.h>
+#import <ComponentTextKit/CKTextKitTruncating.h>
 
 static NSCharacterSet *_defaultAvoidTruncationCharacterSet()
 {
@@ -110,7 +110,7 @@ static NSCharacterSet *_defaultAvoidTruncationCharacterSet()
   UIGraphicsPushContext(context);
 
   [_context performBlockWithLockedTextKitComponents:^(NSLayoutManager *layoutManager, NSTextStorage *textStorage, NSTextContainer *textContainer) {
-    NSRange glyphRange = [layoutManager glyphRangeForTextContainer:textContainer];
+    NSRange glyphRange = [layoutManager glyphRangeForBoundingRect:bounds inTextContainer:textContainer];
     [layoutManager drawBackgroundForGlyphRange:glyphRange atPoint:shadowInsetBounds.origin];
     [layoutManager drawGlyphsForGlyphRange:glyphRange atPoint:shadowInsetBounds.origin];
   }];

@@ -10,9 +10,13 @@
 
 #import <Foundation/Foundation.h>
 
-#import <ComponentKit/CKComponent.h>
+#import <ComponentKit/CKLayoutComponent.h>
+
+NS_ASSUME_NONNULL_BEGIN
 
 /**
+ @uidocs https://fburl.com/CKRatioLayoutComponent:b4d0
+
  Ratio layout component
  For when the content should respect a certain inherent ratio but can be scaled (think photos or videos)
  The ratio passed is the ratio of height / width you expect
@@ -30,10 +34,34 @@
  |_ _|
 
  **/
-@interface CKRatioLayoutComponent : CKComponent
+NS_SWIFT_NAME(RatioLayoutComponent)
+@interface CKRatioLayoutComponent : CKLayoutComponent
 
+CK_INIT_UNAVAILABLE;
+
+CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
+
+#if CK_SWIFT
+
+- (instancetype)initWithRatio:(CGFloat)ratio
+                    swiftSize:(CKComponentSize_SwiftBridge *_Nullable)swiftSize
+                    component:(CKComponent *)component NS_DESIGNATED_INITIALIZER;
+
+#else
+
+- (instancetype)initWithRatio:(CGFloat)ratio
+                         size:(const CKComponentSize &)size
+                    component:(CKComponent *_Nullable)component NS_DESIGNATED_INITIALIZER;
+
+// DEPRECATED - Do not use. Use CK::RatioLayoutComponentBuilder instead.
 + (instancetype)newWithRatio:(CGFloat)ratio
                         size:(const CKComponentSize &)size
-                   component:(CKComponent *)component;
+                   component:(CKComponent *_Nullable)component;
+
+#endif
 
 @end
+
+NS_ASSUME_NONNULL_END
+
+#import <ComponentKit/RatioLayoutComponentBuilder.h>

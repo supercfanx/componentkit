@@ -8,11 +8,15 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
 #import <vector>
 
 #import <UIKit/UIKit.h>
 
-#import <ComponentKit/CKTextKitAttributes.h>
+#import <ComponentTextKit/CKTextKitAttributes.h>
 
 @class CKTextKitContext;
 @class CKTextKitShadower;
@@ -81,3 +85,5 @@
 - (NSUInteger)lineCount;
 
 @end
+
+#endif

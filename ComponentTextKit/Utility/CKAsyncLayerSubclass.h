@@ -8,7 +8,11 @@
  *
  */
 
-#import <ComponentKit/CKAsyncLayer.h>
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
+#import <ComponentTextKit/CKAsyncLayer.h>
 
 @interface CKAsyncLayer (Subclass)
 
@@ -31,3 +35,5 @@
 - (void)didDisplayAsynchronously:(id)newContents withDrawParameters:(id<NSObject>)drawParameters;
 
 @end
+
+#endif

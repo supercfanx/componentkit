@@ -1,23 +1,19 @@
 /*
- *  Copyright (c) 2014-present, Facebook, Inc.
- *  All rights reserved.
- *
- *  This source code is licensed under the BSD-style license found in the
- *  LICENSE file in the root directory of this source tree. An additional grant
- *  of patent rights can be found in the PATENTS file in the same directory.
- *
- */
+*  Copyright (c) 2014-present, Facebook, Inc.
+*  All rights reserved.
+*
+*  This source code is licensed under the BSD-style license found in the
+*  LICENSE file in the root directory of this source tree. An additional grant
+*  of patent rights can be found in the PATENTS file in the same directory.
+*
+*/
 
 #import "CKComponentAccessibility.h"
-#import "CKComponentAccessibility_Private.h"
 
 #import <ComponentKit/CKAssert.h>
 
-#import "ComponentViewManager.h"
-#import "CKComponentViewConfiguration.h"
-
 /** Helper that converts the accessibility context characteristics to a map of component view attributes */
-static CKViewComponentAttributeValueMap ViewAttributesFromAccessibilityContext(const CKComponentAccessibilityContext &accessibilityContext)
+static CKViewComponentAttributeValueMap ViewAttributesFromAccessibilityContext(const CKAccessibilityContext &accessibilityContext)
 {
   CKViewComponentAttributeValueMap accessibilityAttributes;
   if (accessibilityContext.isAccessibilityElement) {
@@ -26,6 +22,15 @@ static CKViewComponentAttributeValueMap ViewAttributesFromAccessibilityContext(c
   if (accessibilityContext.accessibilityLabel.hasText()) {
     accessibilityAttributes[@selector(setAccessibilityLabel:)] = accessibilityContext.accessibilityLabel.value();
   }
+  if (accessibilityContext.accessibilityHint.hasText()) {
+    accessibilityAttributes[@selector(setAccessibilityHint:)] = accessibilityContext.accessibilityHint.value();
+  }
+  if (accessibilityContext.accessibilityValue.hasText()) {
+    accessibilityAttributes[@selector(setAccessibilityValue:)] = accessibilityContext.accessibilityValue.value();
+  }
+  if (accessibilityContext.accessibilityTraits) {
+    accessibilityAttributes[@selector(setAccessibilityTraits:)] = accessibilityContext.accessibilityTraits;
+  }
   return accessibilityAttributes;
 }
 
@@ -33,7 +38,7 @@ CKComponentViewConfiguration CK::Component::Accessibility::AccessibleViewConfigu
 {
   CKCAssertMainThread();
   // Copy is intentional so we can move later.
-  CKComponentAccessibilityContext accessibilityContext = viewConfiguration.accessibilityContext();
+  CKAccessibilityContext accessibilityContext = viewConfiguration.accessibilityContext();
   const CKViewComponentAttributeValueMap &accessibilityAttributes = ViewAttributesFromAccessibilityContext(accessibilityContext);
   if (accessibilityAttributes.size() > 0) {
     CKViewComponentAttributeValueMap newAttributes(*viewConfiguration.attributes());
@@ -58,8 +63,30 @@ void CK::Component::Accessibility::SetForceAccessibilityEnabled(BOOL enabled)
   _forceAccessibilityDisabled = !enabled;
 }
 
+void CK::Component::Accessibility::ResetForceAccessibility()
+{
+  _forceAccessibilityEnabled = NO;
+  _forceAccessibilityDisabled = NO;
+}
+
 BOOL CK::Component::Accessibility::IsAccessibilityEnabled()
 {
   CKCAssertMainThread();
   return !_forceAccessibilityDisabled && (_forceAccessibilityEnabled || UIAccessibilityIsVoiceOverRunning());
+}
+
+NSString *const CKAccessibilityExtraActionKey = @"CKAccessibilityExtraActionKey";
+
+id CKAccessibilityExtraActionValue(CKAction<> action)
+{
+  // Mostly this function exists to ensure the correct type is passed
+  // (CKAction<> not CKAction<Foo>) and that the action is captured
+  // by value, not by reference.
+  return ^{ return action; };
+}
+
+CKAction<> CKAccessibilityActionFromExtraValue(id extraValue)
+{
+  CKAction<> (^block)(void) = extraValue;
+  return block ? block() : CKAction<>();
 }

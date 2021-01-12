@@ -8,9 +8,10 @@
  *
  */
 
-#import <ComponentKit/CKTextKitRendererCache.h>
+#import <ComponentTextKit/CKTextKitRendererCache.h>
 
-#import <ComponentKit/CKEqualityHashHelpers.h>
+#import <ComponentKit/CKEqualityHelpers.h>
+#import <ComponentKit/CKMacros.h>
 
 namespace CK {
   namespace TextKit {
@@ -32,7 +33,7 @@ namespace CK {
           std::hash<CGFloat>()(constrainedSize.width),
           std::hash<CGFloat>()(constrainedSize.height)
         };
-        hash = CKIntegerArrayHash(subhashes, sizeof(subhashes) / sizeof(subhashes[0]));
+        hash = CKIntegerArrayHash(subhashes, CK_ARRAY_COUNT(subhashes));
       }
     }
   }

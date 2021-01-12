@@ -9,18 +9,23 @@
  */
 
 #import "CKComponentBoundsAnimation+UICollectionView.h"
-#import "CKAvailability.h"
+
+#import <ComponentKit/CKAssert.h>
+#import <ComponentKit/CKAvailability.h>
+#import <ComponentKit/CKComponent.h>
+#import <ComponentKit/CKNonNull.h>
+#import <ComponentKit/CKExceptionInfo.h>
 
 #import <vector>
 
 @interface CKComponentBoundsAnimationCollectionViewContext : NSObject
-- (instancetype)initWithCollectionView:(UICollectionView *)cv;
+- (instancetype)initWithCollectionView:(UICollectionView *)cv heightChange:(CGFloat)heightChange;
 - (void)applyBoundsAnimationToCollectionView:(const CKComponentBoundsAnimation &)animation;
 @end
 
-id CKComponentBoundsAnimationPrepareForCollectionViewBatchUpdates(UICollectionView *cv)
+id CKComponentBoundsAnimationPrepareForCollectionViewBatchUpdates(UICollectionView *cv, CGFloat heightChange)
 {
-  return [[CKComponentBoundsAnimationCollectionViewContext alloc] initWithCollectionView:cv];
+  return [[CKComponentBoundsAnimationCollectionViewContext alloc] initWithCollectionView:cv heightChange:heightChange];
 }
 
 void CKComponentBoundsAnimationApplyAfterCollectionViewBatchUpdates(id context, const CKComponentBoundsAnimation &animation)
@@ -39,7 +44,7 @@ void CKComponentBoundsAnimationApplyAfterCollectionViewBatchUpdates(id context, 
   NSDictionary *_supplementaryElementIndexPathsToOriginalLayoutAttributes;
 }
 
-- (instancetype)initWithCollectionView:(UICollectionView *)collectionView
+- (instancetype)initWithCollectionView:(UICollectionView *)collectionView heightChange:(CGFloat)heightChange
 {
   if (self = [super init]) {
     _collectionView = collectionView;
@@ -54,9 +59,11 @@ void CKComponentBoundsAnimationApplyAfterCollectionViewBatchUpdates(id context, 
     const CGRect visibleRect = { collectionView.contentOffset, visibleSize };
 
     // Obviously we want to animate all visible cells. But what about cells that were not previously visible, but become
-    // visible as a result of an item becoming smaller? We grab the layout attributes of a few more items that are
-    // offscreen so that we can animate them too. (Only some, though; we don't attempt to get *all* layout attributes.)
-    const CGFloat offscreenHeight = visibleSize.height / 2;
+    // visible as a result of an item becoming smaller (heightChange < 0)? We grab the layout attributes of a few more
+    // items that are offscreen so that we can animate them too. (Only some, though; we don't attempt to get *all*
+    // layout attributes.) If an item becomes bigger, no additional cells would become visible, so there's no need to
+    // extend the rectangle.
+    const CGFloat offscreenHeight = heightChange > 0 ? 0 : -heightChange;
     const CGRect extendedRect = { visibleRect.origin, { visibleSize.width, visibleSize.height + offscreenHeight } };
 
     NSMutableDictionary *indexPathsToSnapshotViews = [NSMutableDictionary dictionary];
@@ -124,12 +131,27 @@ void CKComponentBoundsAnimationApplyAfterCollectionViewBatchUpdates(id context, 
     return;
   }
 
+  NSIndexPath *largestAnimatingVisibleElement = largestAnimatingVisibleElementForOriginalLayout(_indexPathsToOriginalLayoutAttributes, visibleRect);
+  if (largestAnimatingVisibleElement == nil) {
+    CKCWarnWithCategory(NO, animation.component.className, @"largestAnimatingVisibleElement cannot be nil since it will later be passed to [UICollectionView layoutAttributesForItemAtIndexPath:] which expects a non-null pointer.\nOriginal layout attrs by index path: %@\nVisible rect: %@", _indexPathsToOriginalLayoutAttributes, NSStringFromCGRect(visibleRect));
+    return;
+  }
+
+  [self doApplyBoundsAnimationToCollectionView:animation
+                                   visibleRect:visibleRect
+                largestAnimatingVisibleElement:CK::makeNonNull(largestAnimatingVisibleElement)];
+}
+
+- (void)doApplyBoundsAnimationToCollectionView:(const CKComponentBoundsAnimation &)animation
+                                   visibleRect:(CGRect)visibleRect
+                largestAnimatingVisibleElement:(CK::NonNull<NSIndexPath *>)largestAnimatingVisibleElement
+{
   // First, move the cells to their old positions without animation:
   NSMutableDictionary *indexPathsToAnimatingViews = [NSMutableDictionary dictionary];
   NSMutableDictionary *indexPathsToAnimatingSupplementaryViews = [NSMutableDictionary dictionary];
   NSMutableDictionary *indexPathsToSupplementaryElementKinds = [NSMutableDictionary dictionary];
   NSMutableArray *snapshotViewsToRemoveAfterAnimation = [NSMutableArray array];
-  NSIndexPath *largestAnimatingVisibleElement = largestAnimatingVisibleElementForOriginalLayout(_indexPathsToOriginalLayoutAttributes, visibleRect);
+
   [UIView performWithoutAnimation:^{
     [_indexPathsToOriginalLayoutAttributes enumerateKeysAndObjectsUsingBlock:^(NSIndexPath *indexPath, UICollectionViewLayoutAttributes *attributes, BOOL *stop) {
       // If we're animating an item *out* of the collection view's visible bounds, we can't rely on animating a
@@ -219,13 +241,13 @@ void CKComponentBoundsAnimationApplyAfterCollectionViewBatchUpdates(id context, 
 // @param collectionView The collection view the bounds change animation is being applied to.
 // @param visibleRect The visible portion of the collection-view's contents.
 // @return The minimum content offset to set on the collection-view that will keep the largest visible element still visible.
-static CGPoint contentOffsetAdjustmentToKeepElementInVisibleBounds(NSIndexPath *largestVisibleAnimatingElementIndexPath, NSDictionary *indexPathsToAnimatingViews, UICollectionView *collectionView, CGRect visibleRect)
+static CGPoint contentOffsetAdjustmentToKeepElementInVisibleBounds(CK::NonNull<NSIndexPath *> largestVisibleAnimatingElementIndexPath, NSDictionary *indexPathsToAnimatingViews, UICollectionView *collectionView, CGRect visibleRect)
 {
   CGPoint contentOffsetAdjustment = CGPointZero;
   BOOL largestVisibleElementWillExitVisibleRect = elementWillExitVisibleRect(largestVisibleAnimatingElementIndexPath, indexPathsToAnimatingViews, collectionView, visibleRect);
 
   if (largestVisibleElementWillExitVisibleRect) {
-    CGRect currentBounds = ((UIView *)indexPathsToAnimatingViews[largestVisibleAnimatingElementIndexPath]).bounds;
+    CGRect currentBounds = ((UIView *)indexPathsToAnimatingViews[largestVisibleAnimatingElementIndexPath.asNullable()]).bounds;
     CGRect destinationBounds = ((UICollectionViewLayoutAttributes *) [collectionView layoutAttributesForItemAtIndexPath:largestVisibleAnimatingElementIndexPath]).bounds;
 
     CGFloat deltaX = CGRectGetMaxX(destinationBounds) - CGRectGetMaxX(currentBounds);
@@ -239,7 +261,7 @@ static CGPoint contentOffsetAdjustmentToKeepElementInVisibleBounds(NSIndexPath *
 // @abstract Returns the index-path of largest element in the collection, inside the collection views visible bounds, as returned by the collection view's layout attributes.
 // @param indexPathToOriginalLayoutAttributes A dictionary mapping the indexpath of elements to their collection view layout attributes.
 // @param visibleRect  The visible portion of the collection-view's contents.
-static NSIndexPath* largestAnimatingVisibleElementForOriginalLayout(NSDictionary *indexPathToOriginalLayoutAttributes, CGRect visibleRect) {
+static NSIndexPath *largestAnimatingVisibleElementForOriginalLayout(NSDictionary *indexPathToOriginalLayoutAttributes, CGRect visibleRect) {
   __block CGRect largestSoFar = CGRectZero;
   __block NSIndexPath *prominentElementIndexPath = nil;
   [indexPathToOriginalLayoutAttributes enumerateKeysAndObjectsUsingBlock:^(NSIndexPath *indexPath, UICollectionViewLayoutAttributes *attributes, BOOL *stop) {
@@ -253,10 +275,20 @@ static NSIndexPath* largestAnimatingVisibleElementForOriginalLayout(NSDictionary
 }
 
 // Returns YES if the element is current visible, but will not be visible (will be animated off-screen) post animation.
-static BOOL elementWillExitVisibleRect(NSIndexPath *indexPath, NSDictionary *indexPathsToAnimatingViews, UICollectionView *collectionView, CGRect visibleRect)
+static BOOL elementWillExitVisibleRect(CK::NonNull<NSIndexPath *> indexPath, NSDictionary *indexPathsToAnimatingViews, UICollectionView *collectionView, CGRect visibleRect)
 {
-  UIView *animatingView = indexPathsToAnimatingViews[indexPath];
-  UICollectionViewLayoutAttributes *attributes = [collectionView layoutAttributesForItemAtIndexPath:indexPath];
+  UIView *animatingView = indexPathsToAnimatingViews[indexPath.asNullable()];
+
+  UICollectionViewLayoutAttributes *attributes = nil;
+  @try {
+    attributes = [collectionView layoutAttributesForItemAtIndexPath:indexPath];
+  } @catch (NSException *exception) {
+    CKExceptionInfoSetValueForKey(@"ck_index_path", ([NSString stringWithFormat: @"(%ld-%ld)", (long)[indexPath section], (long)[indexPath row]]));
+    CKExceptionInfoSetValueForKey(@"ck_cv_number_of_sections", ([NSString stringWithFormat:@"%ld", (long)[collectionView numberOfSections]]));
+    CKExceptionInfoSetValueForKey(@"ck_cv_number_of_items_in_section", ([NSString stringWithFormat:@"%ld", (long)[collectionView numberOfItemsInSection:[indexPath section]]]));
+    CKExceptionInfoSetValueForKey(@"ck_cv_visible_rect", NSStringFromCGRect(visibleRect));
+    [exception raise];
+  }
 
   BOOL isItemCurrentlyInVisibleRect = (CGRectIntersectsRect(visibleRect,animatingView.frame));
   BOOL willItemAnimateOffVisibleRect = !CGRectIntersectsRect(visibleRect, attributes.frame);

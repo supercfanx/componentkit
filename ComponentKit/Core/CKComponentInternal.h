@@ -8,13 +8,22 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
 #import <memory>
 
+#import <ComponentKit/CKBuildComponent.h>
 #import <ComponentKit/ComponentMountContext.h>
 #import <ComponentKit/CKComponent.h>
 #import <ComponentKit/CKComponentLayout.h>
+#import <ComponentKit/CKComponentScopeEnumeratorProvider.h>
+#import <ComponentKit/CKTreeNodeProtocol.h>
 
-@interface CKComponent ()
+@protocol CKSystraceListener;
+
+@interface CKComponent () <CKTreeNodeComponentProtocol>
 
 /**
  Mounts the component in the given context:
@@ -24,50 +33,72 @@
    - Unmounts the view's previous component (if any).
    - Applies attributes to the view.
    - Stores a reference to the view in _mountedView (for -viewContext, transient view state, and -unmount).
-   - Stores a reference back to this component in view.ck_component. (This sets up a retain cycle which must be torn
-     down in -unmount.)
+   - Stores a reference back to this component using CKSetMountedComponentForView. (This sets up a
+     retain cycle which must be torn down in -unmount.)
 
  Override this if your component wants to perform a custom mounting action, but this should be very rare!
 
  @param context The component's content should be positioned within the given view at the given position.
- @param size The size for this component
- @param children The positioned children for this component. Normally this parameter is ignored.
+ @param layout The layout that is being mounted
  @param supercomponent This component's parent component
  @return An updated mount context. In most cases, this is just be the passed-in context. If a view was created, this is
  used to specify that subcomponents should be mounted inside the view.
  */
 - (CK::Component::MountResult)mountInContext:(const CK::Component::MountContext &)context
-                                        size:(const CGSize)size
-                                    children:(std::shared_ptr<const std::vector<CKComponentLayoutChild>>)children
+                                      layout:(const RCLayout &)layout
                               supercomponent:(CKComponent *)supercomponent NS_REQUIRES_SUPER;
 
 /**
- Unmounts the component:
- - Clears the references to supercomponent and superview.
- - If the component has a _mountedView:
-   - Calls the unapplicator for any attributes that have one.
-   - Clears the view's reference back to this component in ck_component.
-   - Clears _mountedView.
- */
-- (void)unmount;
+ This method can be used to override what accessible elements are provided by the component. Very similar to UIKit accessibilityElements.
 
-- (const CKComponentViewConfiguration &)viewConfiguration;
+ Override this if your component wants needs to return a custom set of accessible children, but this should be very rare!
+ */
+- (NSArray<NSObject *> *)accessibilityChildren;
+
+/**
+ For internal use only; don't use this directly.
+ */
+- (void)setViewConfiguration:(const CKComponentViewConfiguration &)viewConfiguration;
 
 - (id)nextResponderAfterController;
 
-/** Called when the component and all its children have been mounted. */
-- (void)childrenDidMount;
+- (void)didFinishComponentInitialization;
 
-/** Called by the animation machinery. Do not access this externally. */
-- (UIView *)viewForAnimation;
+/**
+ A CKComponentViewConfiguration specifies the class of a view and the attributes that should be applied to it.
+ */
+- (const CKComponentViewConfiguration &)viewConfiguration;
+
+/** Free form metadata associated with the component */
+@property (nonatomic, readonly) NSDictionary<NSString *, id> *metadata;
 
 /** Used to get the root component in the responder chain; don't touch this. */
 @property (nonatomic, weak) UIView *rootComponentMountedView;
 
-/** For internal use only; don't touch this. */
-@property (nonatomic, strong, readonly) id<NSObject> scopeFrameToken;
-
 /** The size that was passed into the component; don't touch this. */
 @property (nonatomic, assign, readonly) CKComponentSize size;
 
+/** Used to get the scope root enumerator; during component creation only */
+@property (nonatomic, strong, readonly) id<CKComponentScopeEnumeratorProvider> scopeEnumeratorProvider;
+
+/** For internal debug use only; don't touch this. */
+@property (nonatomic, copy, readonly) NSString *backtraceStackDescription;
+
+/** For internal use; don't touch this. */
+@property (nonatomic, assign, readonly) BOOL hasAnimations;
+
+/** For internal use; don't touch this. */
+@property (nonatomic, assign, readonly) BOOL hasBoundsAnimations;
+
+/** For internal use; don't touch this. */
+@property (nonatomic, assign, readonly) BOOL hasInitialMountAnimations;
+
+/** For internal use; don't touch this. */
+@property (nonatomic, assign, readonly) BOOL hasFinalUnmountAnimations;
+
+/** For internal use; don't touch this. */
+@property (nonatomic, assign, readonly) BOOL controllerOverridesDidPrepareLayout;
+
 @end
+
+#endif

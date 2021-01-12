@@ -13,7 +13,7 @@
 
 #import <ComponentKitTestHelpers/CKTestActionComponent.h>
 
-#import <ComponentKit/CKComponentAction.h>
+#import <ComponentKit/CKAction.h>
 #import <ComponentKit/CKCompositeComponent.h>
 #import <ComponentKit/CKComponentSubclass.h>
 #import <ComponentKit/CKComponentInternal.h>
@@ -38,19 +38,17 @@
   __block CKComponent *actionSender = nil;
 
   CKComponent *controlComponent =
-  [CKComponent
-   newWithView:{
-     [UIButton class],
-     {CKComponentActionAttribute(@selector(testAction:context:))}
-   }
-   size:{}];
+  CK::ComponentBuilder()
+      .viewClass([UIButton class])
+      .onTouchUpInside(@selector(testAction:context:))
+      .build();
 
   CKTestActionComponent *outerComponent =
   [CKTestActionComponent
    newWithSingleArgumentBlock:^(CKComponent *sender, id context) { actionSender = sender; }
    secondArgumentBlock:^(CKComponent *sender, id obj1, id obj2) { }
    primitiveArgumentBlock:^(CKComponent *sender, int value) { }
-   noArgumentBlock:^{ }
+   noArgumentBlock:^(CKComponent *sender) { }
    component:controlComponent];
 
   // Must be mounted to send actions:
@@ -68,19 +66,17 @@
   __block BOOL receivedAction = NO;
 
   CKComponent *controlComponent =
-  [CKComponent
-   newWithView:{
-     [UIButton class],
-     {CKComponentActionAttribute(@selector(testAction:context:), UIControlEventValueChanged)}
-   }
-   size:{}];
+  CK::ComponentBuilder()
+      .viewClass([UIButton class])
+      .onControlEvents(UIControlEventValueChanged, @selector(testAction:context:))
+      .build();
 
   CKTestActionComponent *outerComponent =
   [CKTestActionComponent
    newWithSingleArgumentBlock:^(CKComponent *sender, id context){ receivedAction = YES; }
    secondArgumentBlock:^(CKComponent *sender, id obj1, id obj2) { }
    primitiveArgumentBlock:^(CKComponent *sender, int value) { }
-   noArgumentBlock:^{ }
+   noArgumentBlock:^(CKComponent *sender) { }
    component:controlComponent];
 
   // Must be mounted to send actions:
@@ -93,24 +89,56 @@
   CKUnmountComponents(mountedComponents);
 }
 
+- (void)testMultipleControlActionAttributesWithControlEventSpecified
+{
+  __block NSUInteger actionCount = 0;
+
+  CKComponent *controlComponent =
+  CK::ComponentBuilder()
+      .viewClass([UIButton class])
+      .onControlEvents(UIControlEventValueChanged, @selector(testAction:context:))
+      .onTouchUpInside(@selector(testAction:context:))
+      .onControlEvents(UIControlEventTouchDown, @selector(testAction:context:))
+      .build();
+
+  CKTestActionComponent *outerComponent =
+  [CKTestActionComponent
+   newWithSingleArgumentBlock:^(CKComponent *sender, id context){ actionCount++; }
+   secondArgumentBlock:^(CKComponent *sender, id obj1, id obj2) { }
+   primitiveArgumentBlock:^(CKComponent *sender, int value) { }
+   noArgumentBlock:^(CKComponent *sender) { }
+   component:controlComponent];
+
+  // Must be mounted to send actions:
+  UIView *rootView = [UIView new];
+  NSSet *mountedComponents = CKMountComponentLayout([outerComponent layoutThatFits:{} parentSize:{}], rootView, nil, nil);
+
+  [(UIControl *)[controlComponent viewContext].view sendActionsForControlEvents:UIControlEventValueChanged];
+  XCTAssertTrue(actionCount == 1, @"Should have received action for UIControlEventValueChanged");
+  [(UIControl *)[controlComponent viewContext].view sendActionsForControlEvents:UIControlEventTouchUpInside];
+  XCTAssertTrue(actionCount == 2, @"Should have received action for UIControlEventTouchUpInside");
+  [(UIControl *)[controlComponent viewContext].view sendActionsForControlEvents:UIControlEventTouchDown];
+  XCTAssertTrue(actionCount == 3, @"Should have received action for UIControlEventTouchDown");
+
+  CKUnmountComponents(mountedComponents);
+}
+
 - (void)testControlActionIsNotSentForControlEventsThatDoNotMatch
 {
   __block BOOL receivedAction = NO;
 
   CKComponent *controlComponent =
-  [CKComponent
-   newWithView:{
-     [UIButton class],
-     {CKComponentActionAttribute(@selector(testAction:context:))}
-   }
-   size:{}];
+  CK::ComponentBuilder()
+      .viewClass([UIButton class])
+      .onTouchUpInside(@selector(testAction:context:))
+      .build();
 
   CKTestActionComponent *outerComponent =
   [CKTestActionComponent
    newWithSingleArgumentBlock:^(CKComponent *sender, id context){ receivedAction = YES; }
    secondArgumentBlock:^(CKComponent *sender, id obj1, id obj2) { }
    primitiveArgumentBlock:^(CKComponent *sender, int value) { }
-   noArgumentBlock:^{ }
+   noArgumentBlock:^(CKComponent *sender) { }
    component:controlComponent];
 
   // Must be mounted to send actions:
@@ -128,19 +156,17 @@
   __block BOOL receivedAction = NO;
 
   CKComponent *controlComponent =
-  [CKComponent
-   newWithView:{
-     [UIButton class],
-     {CKComponentActionAttribute(NULL)}
-   }
-   size:{}];
+  CK::ComponentBuilder()
+      .viewClass([UIButton class])
+      .onTouchUpInside(nullptr)
+      .build();
 
   CKTestActionComponent *outerComponent =
   [CKTestActionComponent
    newWithSingleArgumentBlock:^(CKComponent *sender, id context){ receivedAction = YES; }
    secondArgumentBlock:^(CKComponent *sender, id obj1, id obj2) { }
    primitiveArgumentBlock:^(CKComponent *sender, int value) { }
-   noArgumentBlock:^{ }
+   noArgumentBlock:^(CKComponent *sender) { }
    component:controlComponent];
 
   // Must be mounted to send actions:

@@ -14,11 +14,22 @@
 #import <ComponentKit/CKComponentInternal.h>
 #import <ComponentKit/CKComponentLayout.h>
 #import <ComponentKit/CKComponentSubclass.h>
+#import <ComponentKit/CKIterableHelpers.h>
+#import <ComponentKit/CKLayoutComponent.h>
+#import <ComponentKit/CKMountableHelpers.h>
+#import <ComponentKit/CKMountedObjectForView.h>
 
-@interface CKComponentMountTests : XCTestCase
+#import "CKComponentTestCase.h"
+
+@interface CKComponentMountTests : CKComponentTestCase
 @end
 
-@interface CKDontMountChildrenComponent : CKComponent
+@interface CKDontMountChildrenComponent : CKLayoutComponent
+
+CK_INIT_UNAVAILABLE;
+
+CK_LAYOUT_COMPONENT_INIT_UNAVAILABLE;
+
 + (instancetype)newWithChild:(CKComponent *)child;
 @end
 
@@ -26,10 +37,12 @@
 
 - (void)testThatMountingComponentThatReturnsMountChildrenNoDoesNotMountItsChild
 {
-  CKComponent *viewComponent = [CKComponent newWithView:{[UIView class]} size:{}];
+  CKComponent *viewComponent = CK::ComponentBuilder()
+                                   .viewClass([UIView class])
+                                   .build();
   CKComponent *c = [CKDontMountChildrenComponent newWithChild:viewComponent];
 
-  CKComponentLayout layout = [c layoutThatFits:{} parentSize:{NAN, NAN}];
+  RCLayout layout = [c layoutThatFits:{} parentSize:{NAN, NAN}];
 
   XCTAssertTrue(layout.children->front().layout.component == viewComponent,
                @"Expected view component to exist in the layout tree");
@@ -45,8 +58,10 @@
 
 - (void)testMountingComponentAffectsResponderChain
 {
-  CKComponent *c = [CKComponent newWithView:{[UIView class]} size:{}];
-  CKComponentLayout layout = [c layoutThatFits:{} parentSize:{NAN, NAN}];
+  CKComponent *c = CK::ComponentBuilder()
+                       .viewClass([UIView class])
+                       .build();
+  RCLayout layout = [c layoutThatFits:{} parentSize:{NAN, NAN}];
 
   UIView *container = [UIView new];
   NSSet *mountedComponents = CKMountComponentLayout(layout, container, nil, nil);
@@ -58,10 +73,14 @@
 
 - (void)testUnmounting
 {
-  CKComponent *a = [CKComponent newWithView:{[UIView class]} size:{}];
-  CKComponent *b = [CKComponent newWithView:{[UIView class]} size:{}];
+  CKComponent *a = CK::ComponentBuilder()
+                       .viewClass([UIView class])
+                       .build();
+  CKComponent *b = CK::ComponentBuilder()
+                       .viewClass([UIView class])
+                       .build();
 
-  const CKComponentLayout layoutBoth = {a, CGSizeZero,
+  const RCLayout layoutBoth = {a, CGSizeZero,
     {
       {CGPointZero, {a, {}, {}}},
       {CGPointZero, {b, {}, {}}},
@@ -74,7 +93,7 @@
   XCTAssertNotNil(a.viewContext.view, @"Didn't create view");
   XCTAssertNotNil(b.viewContext.view, @"Didn't create view");
 
-  const CKComponentLayout layoutA = {a, CGSizeZero,
+  const RCLayout layoutA = {a, CGSizeZero,
     {
       {CGPointZero, {a, {}, {}}},
     }
@@ -91,6 +110,33 @@
   XCTAssertNil(b.viewContext.view, @"Should not be mounted");
 }
 
+- (void)testPerformMount
+{
+  const auto viewConfig = CKComponentViewConfiguration {
+    [UILabel class],
+    {{@selector(setText:), @"Hello"}}
+  };
+  const auto component = [CKComponent newWithView:viewConfig size:{}];
+  const auto view = [[UIView alloc] initWithFrame:CGRect {{0, 0}, {10, 10}}];
+  const auto context = CK::Component::MountContext::RootContext(view, nullptr);
+  RCLayout layout(component, {5, 5});
+
+  std::unique_ptr<CKMountInfo> mountInfo;
+
+  const auto result = CKPerformMount(mountInfo, layout, viewConfig, context, nil, nullptr, nullptr);
+  const auto label = (UILabel *)view.subviews.firstObject;
+  XCTAssertTrue(result.mountChildren);
+  XCTAssertTrue(CGRectEqualToRect(label.frame, CGRect {{0, 0}, {5, 5}}));
+  XCTAssertTrue(CGRectEqualToRect(mountInfo->viewContext.frame, CGRect {{0, 0}, {5, 5}}));
+  XCTAssertEqualObjects(label.text, @"Hello");
+  XCTAssertEqual(CKMountedObjectForView(label), component);
+  XCTAssertEqual(mountInfo->view, label);
+
+  CKPerformUnmount(mountInfo, component, nil);
+  XCTAssertTrue(mountInfo == nullptr);
+  XCTAssertNil(CKMountedObjectForView(label));
+}
+
 @end
 
 @implementation CKDontMountChildrenComponent
@@ -105,7 +151,17 @@
   return c;
 }
 
-- (CKComponentLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+- (unsigned int)numberOfChildren
+{
+  return RCIterable::numberOfChildren(_child);
+}
+
+- (id<CKMountable>)childAtIndex:(unsigned int)index
+{
+  return RCIterable::childAtIndex(self, index, _child);
+}
+
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
 {
   return {
     self,
@@ -115,11 +171,10 @@
 }
 
 - (CK::Component::MountResult)mountInContext:(const CK::Component::MountContext &)context
-size:(const CGSize)size
-children:(std::shared_ptr<const std::vector<CKComponentLayoutChild>>)children
-supercomponent:(CKComponent *)supercomponent
+                                        layout:(const RCLayout &)layout
+                              supercomponent:(CKComponent *)supercomponent
 {
-  CK::Component::MountResult r = [super mountInContext:context size:size children:children supercomponent:supercomponent];
+  CK::Component::MountResult r = [super mountInContext:context layout:layout supercomponent:supercomponent];
   return {
     .mountChildren = NO,
     .contextForChildren = r.contextForChildren

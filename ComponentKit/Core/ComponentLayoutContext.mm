@@ -18,40 +18,44 @@
 
 using namespace CK::Component;
 
-static pthread_key_t kCKComponentLayoutContextThreadKey;
+static pthread_key_t kCKLayoutContextThreadKey;
 
 struct ThreadKeyInitializer {
-  static void destroyStack(LayoutContextStack *p) { delete p; }
-  ThreadKeyInitializer() { pthread_key_create(&kCKComponentLayoutContextThreadKey, (void (*)(void*))destroyStack); }
+  static void destroyStack(LayoutContextValue *p) noexcept { delete p; }
+  ThreadKeyInitializer() { pthread_key_create(&kCKLayoutContextThreadKey, (void (*)(void*))destroyStack); }
 };
 
-static LayoutContextStack &componentStack()
+static LayoutContextValue &componentValue(id<CKSystraceListener> listener = nil)
 {
   static ThreadKeyInitializer threadKey;
-  LayoutContextStack *contexts = static_cast<LayoutContextStack *>(pthread_getspecific(kCKComponentLayoutContextThreadKey));
+  LayoutContextValue *contexts = static_cast<LayoutContextValue *>(pthread_getspecific(kCKLayoutContextThreadKey));
   if (!contexts) {
-    contexts = new LayoutContextStack;
-    pthread_setspecific(kCKComponentLayoutContextThreadKey, contexts);
+    contexts = new LayoutContextValue;
+    if (listener) {
+      contexts->systraceListener = listener;
+    }
+    pthread_setspecific(kCKLayoutContextThreadKey, contexts);
   }
   return *contexts;
 }
 
 static void removeComponentStackForThisThread()
 {
-  LayoutContextStack *contexts = static_cast<LayoutContextStack *>(pthread_getspecific(kCKComponentLayoutContextThreadKey));
+  LayoutContextValue *contexts = static_cast<LayoutContextValue *>(pthread_getspecific(kCKLayoutContextThreadKey));
   ThreadKeyInitializer::destroyStack(contexts);
-  pthread_setspecific(kCKComponentLayoutContextThreadKey, nullptr);
+  pthread_setspecific(kCKLayoutContextThreadKey, nullptr);
 }
 
 LayoutContext::LayoutContext(CKComponent *c, CKSizeRange r) : component(c), sizeRange(r)
 {
-  auto &stack = componentStack();
-  stack.push_back(this);
+  auto &value = componentValue();
+  systraceListener = value.systraceListener;
+  value.stack.push_back(this);
 }
 
 LayoutContext::~LayoutContext()
 {
-  auto &stack = componentStack();
+  auto &stack = componentValue().stack;
   CKCAssert(stack.back() == this,
             @"Last component layout context %@ is not %@", stack.back()->component, component);
   stack.pop_back();
@@ -60,14 +64,25 @@ LayoutContext::~LayoutContext()
   }
 }
 
-const CK::Component::LayoutContextStack &LayoutContext::currentStack()
+const CK::Component::LayoutContextStack &LayoutContext::currentStack() noexcept
 {
-  return componentStack();
+  return componentValue().stack;
 }
 
-NSString *LayoutContext::currentStackDescription()
+static auto componentClassString(CKComponent *component) -> NSString * {
+  const auto className = component.className;
+  const auto componentClassString = NSStringFromClass(component.class);
+
+  if ([className isEqualToString:componentClassString]) {
+    return className;
+  } else {
+    return [NSString stringWithFormat:@"%@ (%@)", className, componentClassString];
+  }
+}
+
+NSString *LayoutContext::currentStackDescription() noexcept
 {
-  const auto &stack = componentStack();
+  const auto &stack = componentValue().stack;
   NSMutableString *s = [NSMutableString string];
   NSUInteger idx = 0;
   for (CK::Component::LayoutContext *c : stack) {
@@ -75,10 +90,22 @@ NSString *LayoutContext::currentStackDescription()
       [s appendString:@"\n"];
     }
     [s appendString:[@"" stringByPaddingToLength:idx withString:@" " startingAtIndex:0]];
-    [s appendString:NSStringFromClass([c->component class])];
+    [s appendString:componentClassString(c->component)];
     [s appendString:@": "];
     [s appendString:c->sizeRange.description()];
     idx++;
   }
   return s;
+}
+
+NSString *LayoutContext::currentRootComponentClassName() noexcept
+{
+  const auto &stack = componentValue().stack;
+  return stack.empty() ? @"" : componentClassString(stack[0]->component);
+}
+
+LayoutSystraceContext::LayoutSystraceContext(id<CKSystraceListener> listener) {
+  if (listener) {
+    componentValue(listener);
+  }
 }

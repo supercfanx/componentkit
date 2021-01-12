@@ -8,17 +8,76 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
 #import <unordered_map>
 
-#import <ComponentKit/CKComponent.h>
-#import <ComponentKit/CKComponentAction.h>
+#import <UIKit/UIKit.h>
 
-struct CKButtonComponentAccessibilityConfiguration {
-  /** Accessibility label for the button. If one is not provided, the button title will be used as a label */
-  NSString *accessibilityLabel;
+#import <ComponentKit/CKComponent.h>
+#import <ComponentKit/CKAction.h>
+#import <ComponentKit/RCContainerWrapper.h>
+
+template <typename V>
+class CKButtonComponentStateMap {
+public:
+  using Map = std::unordered_map<UIControlState, V>;
+  /// Default constructor.
+  CKButtonComponentStateMap() {}
+  /// Single value (applied to `UIControlStateNormal`).
+  CKButtonComponentStateMap(const V v) : map({{UIControlStateNormal, v}}) {}
+  /// Multiple values for specific `UIControlState`s as inline list.
+  CKButtonComponentStateMap(std::initializer_list<typename Map::value_type> init) : map(std::move(init)) {}
+  /// Multiple values for specific `UIControlState`s as existing map.
+  CKButtonComponentStateMap(const std::unordered_map<UIControlState, V> &m) : map(m) {};
+  /// Get the states map.
+  const Map &getMap() const { return map; }
+private:
+  Map map;
+};
+
+struct CKButtonComponentOptions {
+  /// The title of the button for different states.
+  CKButtonComponentStateMap<NSString *> titles;
+  /// The title colors of the button for different states.
+  CKButtonComponentStateMap<UIColor *> titleColors;
+  /// The images of the button for different states.
+  CKButtonComponentStateMap<UIImage *> images;
+  /// The background images of the button for different states.
+  CKButtonComponentStateMap<UIImage *> backgroundImages;
+  /// The title font the button.
+  UIFont *titleFont;
+  /// The title alignment
+  NSTextAlignment titleAlignment;
+  /// Whether the button is selected.
+  BOOL selected = NO;
+  /// Whether the button is enabled.
+  BOOL enabled = YES;
+  /// The maximum number of lines to use for rendering text.
+  NSInteger numberOfLines = 1;
+  /// The line break mode for the title label.
+  NSLineBreakMode lineBreakMode = NSLineBreakByTruncatingMiddle;
+  /// Additional attributes for the underlying UIButton
+  CKViewComponentAttributeValueMap attributes;
+  /// Accessibility context for the button.
+  CKAccessibilityContext accessibilityContext;
+  /// Size restrictions for the button.
+  CKComponentSize size;
+  /// The inset or outset margins for the rectangle around the button's content.
+  UIEdgeInsets contentEdgeInsets = UIEdgeInsetsZero;
+  /// The inset or outset margins for the rectangle around the button's title text.
+  UIEdgeInsets titleEdgeInsets = UIEdgeInsetsZero;
+  /// The inset or outset margins for the rectangle around the button's image.
+  UIEdgeInsets imageEdgeInsets = UIEdgeInsetsZero;
+  /// The outset for tap target expansion
+  UIEdgeInsets tapTargetExpansion;
 };
 
 /**
+ @uidocs https://fburl.com/CKButtonComponent:05b0
+
  A component that creates a UIButton.
 
  This component chooses the smallest size within its SizeRange that will fit its content. If its max size is smaller
@@ -26,16 +85,13 @@ struct CKButtonComponentAccessibilityConfiguration {
  */
 @interface CKButtonComponent : CKComponent
 
-+ (instancetype)newWithTitles:(const std::unordered_map<UIControlState, NSString *> &)titles
-                  titleColors:(const std::unordered_map<UIControlState, UIColor *> &)titleColors
-                       images:(const std::unordered_map<UIControlState, UIImage *> &)images
-             backgroundImages:(const std::unordered_map<UIControlState, UIImage *> &)backgroundImages
-                    titleFont:(UIFont *)titleFont
-                     selected:(BOOL)selected
-                      enabled:(BOOL)enabled
-                       action:(const CKTypedComponentAction<UIEvent *> &)action
-                         size:(const CKComponentSize &)size
-                   attributes:(const CKViewComponentAttributeValueMap &)attributes
-   accessibilityConfiguration:(CKButtonComponentAccessibilityConfiguration)accessibilityConfiguration;
+CK_COMPONENT_INIT_UNAVAILABLE;
+
+- (instancetype)initWithAction:(const CKAction<UIEvent *>)action
+                       options:(const CKButtonComponentOptions &)options NS_DESIGNATED_INITIALIZER;
 
 @end
+
+#import <ComponentKit/ButtonComponentBuilder.h>
+
+#endif

@@ -15,12 +15,14 @@
 
 #import <ComponentKit/CKComponentInternal.h>
 
-#import <ComponentKit/CKTextKitRenderer.h>
-#import <ComponentKit/CKTextKitRendererCache.h>
+#import <ComponentTextKit/CKTextKitRenderer.h>
+#import <ComponentTextKit/CKTextKitRendererCache.h>
 
 #import <ComponentKit/CKInternalHelpers.h>
 
 #import "CKTextComponentView.h"
+
+@protocol CKSystraceListener;
 
 static CK::TextKit::Renderer::Cache *sharedRendererCache()
 {
@@ -85,7 +87,7 @@ static CKTextKitRenderer *rendererForAttributes(CKTextKitAttributes &attributes,
   return c;
 }
 
-- (CKComponentLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
 {
   const CKTextKitRenderer *renderer = rendererForAttributes(_attributes, constrainedSize.max);
   return {
@@ -99,16 +101,14 @@ static CKTextKitRenderer *rendererForAttributes(CKTextKitAttributes &attributes,
 }
 
 - (CK::Component::MountResult)mountInContext:(const CK::Component::MountContext &)context
-                                        size:(const CGSize)size
-                                    children:(std::shared_ptr<const std::vector<CKComponentLayoutChild>>)children
+                                        layout:(const RCLayout &)layout
                               supercomponent:(CKComponent *)supercomponent
 {
   CK::Component::MountResult result = [super mountInContext:context
-                                                       size:size
-                                                   children:children
+                                                       layout:layout
                                              supercomponent:supercomponent];
   CKTextComponentView *view = (CKTextComponentView *)result.contextForChildren.viewManager->view;
-  CKTextKitRenderer *renderer = rendererForAttributes(_attributes, size);
+  CKTextKitRenderer *renderer = rendererForAttributes(_attributes, layout.size);
   view.renderer = renderer;
   view.isAccessibilityElement = _accessibilityContext.isAccessibilityElement.boolValue;
   view.accessibilityLabel = _accessibilityContext.accessibilityLabel.hasText() ? _accessibilityContext.accessibilityLabel.value() : _attributes.attributedString.string;

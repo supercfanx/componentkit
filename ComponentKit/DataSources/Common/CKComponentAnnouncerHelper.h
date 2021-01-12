@@ -8,6 +8,10 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
 #import <objc/message.h>
 #import <vector>
 
@@ -21,13 +25,13 @@ namespace CK {
     {
     private:
       // function to load the current listeners vector in a thread safe way
-      static std::shared_ptr<const std::vector<__weak id>> loadListeners(CKComponentAnnouncerBase *self);
+      static std::shared_ptr<const std::vector<__weak id>> loadListeners(CKComponentAnnouncerBase *self) noexcept;
     public:
       template<typename... ARGS>
       static void call(CKComponentAnnouncerBase *self, SEL s, ARGS... args) {
         typedef void (*TT)(id self, SEL _cmd, ARGS...); // for floats, etc, we need to use the strong typed versions
         TT objc_msgSendTyped = (TT)(void*)objc_msgSend;
-        
+
         auto frozenListeners = loadListeners(self);
         if (frozenListeners) {
           for (id listener : *frozenListeners) {
@@ -35,12 +39,12 @@ namespace CK {
           }
         }
       }
-      
+
       template<typename... ARGS>
       static void callOptional(CKComponentAnnouncerBase *self, SEL s, ARGS... args) {
         typedef void (*TT)(id self, SEL _cmd, ARGS...); // for floats, etc, we need to use the strong typed versions
         TT objc_msgSendTyped = (TT)(void*)objc_msgSend;
-        
+
         auto frozenListeners = loadListeners(self);
         if (frozenListeners) {
           for (id listener : *frozenListeners) {
@@ -50,10 +54,12 @@ namespace CK {
           }
         }
       }
-      
-      static void addListener(CKComponentAnnouncerBase *self, SEL s, id listener);
-      
-      static void removeListener(CKComponentAnnouncerBase *self, SEL s, id listener);
+
+      static void addListener(CKComponentAnnouncerBase *self, SEL s, id listener) noexcept;
+
+      static void removeListener(CKComponentAnnouncerBase *self, SEL s, id listener) noexcept;
     };
   }
 }
+
+#endif

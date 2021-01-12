@@ -8,6 +8,10 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
+
+#if CK_NOT_SWIFT
+
 #import <UIKit/UIKit.h>
 
 /**
@@ -19,8 +23,6 @@ typedef BOOL (^CKStatefulViewReusePoolPendingMayRelinquishBlock)(void);
 
 + (instancetype)sharedPool;
 
-@property (nonatomic, assign) BOOL pendingReusePoolEnabled;
-
 - (UIView *)dequeueStatefulViewForControllerClass:(Class)controllerClass
                                preferredSuperview:(UIView *)preferredSuperview
                                           context:(id)context;
@@ -31,3 +33,5 @@ typedef BOOL (^CKStatefulViewReusePoolPendingMayRelinquishBlock)(void);
          mayRelinquishBlock:(CKStatefulViewReusePoolPendingMayRelinquishBlock)mayRelinquishBlock;
 
 @end
+
+#endif

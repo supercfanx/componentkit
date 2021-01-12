@@ -12,7 +12,8 @@
 
 #import <ComponentKit/CKAssert.h>
 #import <ComponentKit/CKMacros.h>
-
+#import <ComponentKit/CKComponentInternal.h>
+#import <ComponentKit/CKComponentPerfScope.h>
 #import "CKComponentSubclass.h"
 
 @implementation CKBackgroundLayoutComponent
@@ -21,29 +22,32 @@
   CKComponent *_background;
 }
 
-+ (instancetype)newWithComponent:(CKComponent *)component
-                      background:(CKComponent *)background
+- (instancetype)initWithComponent:(CKComponent *)component
+                       background:(CKComponent *)background
 {
-  if (component == nil) {
-    return nil;
+  CKComponentPerfScope perfScope(self.class);
+  if (self = [super initWithView:{} size:{}]) {
+    _component = component;
+    _background = background;
   }
-  CKBackgroundLayoutComponent *c = [super newWithView:{} size:{}];
-  if (c) {
-    c->_component = component;
-    c->_background = background;
-  }
-  return c;
+
+  return self;
 }
 
-+ (instancetype)newWithView:(const CKComponentViewConfiguration &)view size:(const CKComponentSize &)size
+- (unsigned int)numberOfChildren
 {
-  CK_NOT_DESIGNATED_INITIALIZER();
+  return RCIterable::numberOfChildren(_component, _background);
+}
+
+- (id<CKMountable>)childAtIndex:(unsigned int)index
+{
+  return RCIterable::childAtIndex(self, index, _component, _background);
 }
 
 /**
  First layout the contents, then fit the background image.
  */
-- (CKComponentLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
+- (RCLayout)computeLayoutThatFits:(CKSizeRange)constrainedSize
                           restrictedToSize:(const CKComponentSize &)size
                       relativeToParentSize:(CGSize)parentSize
 {
@@ -51,17 +55,17 @@
            @"CKBackgroundLayoutComponent only passes size {} to the super class initializer, but received size %@ "
            "(component=%@, background=%@)", size.description(), _component, _background);
 
-  const CKComponentLayout contentsLayout = [_component layoutThatFits:constrainedSize parentSize:parentSize];
+  const RCLayout contentsLayout = [_component layoutThatFits:constrainedSize parentSize:parentSize];
 
   return {
     self,
     contentsLayout.size,
     _background
-    ? std::vector<CKComponentLayoutChild> {
+    ? std::vector<RCLayoutChild> {
       {{0,0}, [_background layoutThatFits:{contentsLayout.size, contentsLayout.size} parentSize:contentsLayout.size]},
       {{0,0}, contentsLayout},
     }
-    : std::vector<CKComponentLayoutChild> {
+    : std::vector<RCLayoutChild> {
       {{0,0}, contentsLayout}
     }
   };

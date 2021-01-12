@@ -14,6 +14,8 @@
 
 #import <mutex>
 
+#import <ComponentKit/CKMutex.h>
+
 #import "CKComponent+UIView.h"
 #import "CKComponent.h"
 #import "CKComponentAnimation.h"
@@ -21,7 +23,6 @@
 #import "CKComponentHostingViewInternal.h"
 #import "CKComponentInternal.h"
 #import "CKComponentRootView.h"
-#import "CKMutex.h"
 
 #import <objc/runtime.h>
 
@@ -135,8 +136,22 @@ static std::mutex reflowMutex;
 
 + (void)reflowComponents
 {
+  [self enumerateListeners:^(id<CKComponentDebugReflowListener> listener) {
+    [listener didReceiveReflowComponentsRequest];
+  }];
+}
+
++ (void)reflowComponentsWithTreeNodeIdentifier:(CKTreeNodeIdentifier)treeNodeIdentifier
+{
+  [self enumerateListeners:^(id<CKComponentDebugReflowListener> listener) {
+    [listener didReceiveReflowComponentsRequestWithTreeNodeIdentifier:treeNodeIdentifier];
+  }];
+}
+
++ (void)enumerateListeners:(void(^)(id<CKComponentDebugReflowListener>))block
+{
   if (![NSThread isMainThread]) {
-    dispatch_async(dispatch_get_main_queue(), ^{ [self reflowComponents]; });
+    dispatch_async(dispatch_get_main_queue(), ^{ [self enumerateListeners:block]; });
     return;
   }
   NSArray<id<CKComponentDebugReflowListener>> *copiedListeners;
@@ -145,7 +160,7 @@ static std::mutex reflowMutex;
     copiedListeners = [reflowListeners allObjects];
   }
   for (id<CKComponentDebugReflowListener> listener in copiedListeners) {
-    [listener didReceiveReflowComponentsRequest];
+    block(listener);
   }
 }
 

@@ -8,6 +8,7 @@
  *
  */
 
+#import <ComponentKit/CKDefines.h>
 #import <UIKit/UIKit.h>
 
 /**
